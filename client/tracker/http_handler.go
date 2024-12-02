@@ -19,7 +19,7 @@ func SendAnnounceHTTP(urlStr string, infoHash string) (peers []Peer, err error) 
 	if err != nil {
 		return
 	}
-	peerID := getPeerID()
+	peerID := GetPeerID()
 
 	q := req.URL.Query()
 	q.Add("info_hash", infoHash)

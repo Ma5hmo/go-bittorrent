@@ -86,8 +86,8 @@ func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash [20]byte) 
 	const BUFF_SIZE = 1024
 	const HEADER_LENGTH = 20
 
-	req := newAnnounceRequestUDP(connectionID, infoHash, getPeerID(), 0, 1000, 0, 2,
-		[4]byte{0}, 6881, (BUFF_SIZE-HEADER_LENGTH)/6)
+	req := newAnnounceRequestUDP(connectionID, infoHash, GetPeerID(), 0, 1000, 0, 2,
+		[4]byte{0}, 6881, 10) // (BUFF_SIZE-HEADER_LENGTH)/6)
 
 	err = binary.Write(conn, binary.BigEndian, req)
 	if err != nil {

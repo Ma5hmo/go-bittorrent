@@ -7,7 +7,7 @@ type Peer struct {
 	Port uint16
 }
 
-func getPeerID() (peerID [20]byte) {
+func GetPeerID() (peerID [20]byte) {
 	peerID = [20]byte{} // create a random peerId (temporarily)
 	for i := 0; i < 20; i++ {
 		peerID[i] = byte(rand.UintN(256))

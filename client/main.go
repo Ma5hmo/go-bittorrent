@@ -1,6 +1,7 @@
 package main
 
 import (
+	"client/peering"
 	"client/torrent"
 	"client/tracker"
 	"encoding/hex"
@@ -52,6 +53,12 @@ func main() {
 				fmt.Println("UDP Error from", udpAddr, ": ", err)
 			} else {
 				fmt.Println("Peers from", strURL, ": ", peers)
+				for _, peer := range peers {
+					go func() {
+						fmt.Println("handshaking peer: ", peer)
+						peering.PeerHandshake(peer, infoHash)
+					}()
+				}
 			}
 		}
 	}
