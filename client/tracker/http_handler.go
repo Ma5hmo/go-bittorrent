@@ -21,6 +21,7 @@ func SendAnnounceHTTP(urlStr string, infoHash string) (peers []Peer, err error) 
 	}
 	peerID := GetPeerID()
 
+	// Add Get parameters to url
 	q := req.URL.Query()
 	q.Add("info_hash", infoHash)
 	q.Add("peer_id", string(peerID[:]))
@@ -33,6 +34,7 @@ func SendAnnounceHTTP(urlStr string, infoHash string) (peers []Peer, err error) 
 	req.URL.RawQuery = q.Encode()
 	fmt.Println("sending ", req.URL)
 
+	// Send it!
 	res, err := httpClient.Do(req)
 	if err != nil {
 		return
