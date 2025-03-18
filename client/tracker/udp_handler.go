@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"bytes"
+	"client/peering"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -82,11 +83,11 @@ func sendConnectUDP(conn *net.UDPConn) (connectionID uint64, err error) {
 	return
 }
 
-func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash [20]byte) (peers []Peer, err error) {
+func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash [20]byte) (peers []peering.Peer, err error) {
 	const BUFF_SIZE = 1024
 	const HEADER_LENGTH = 20
 
-	req := newAnnounceRequestUDP(connectionID, infoHash, GetPeerID(), 0, 1000, 0, 2,
+	req := newAnnounceRequestUDP(connectionID, infoHash, peering.GetPeerID(), 0, 1000, 0, 2,
 		[4]byte{0}, 6881, 10) // (BUFF_SIZE-HEADER_LENGTH)/6)
 
 	err = binary.Write(conn, binary.BigEndian, req)
@@ -116,12 +117,12 @@ func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash [20]byte) 
 		return
 	}
 
-	peers = make([]Peer, (bytesRead-HEADER_LENGTH)/6)
+	peers = make([]peering.Peer, (bytesRead-HEADER_LENGTH)/6)
 	err = binary.Read(resBytes, binary.BigEndian, &peers)
 	return
 }
 
-func SendUDPRequest(url string, infoHash [20]byte) (peers []Peer, err error) {
+func SendUDPRequest(url string, infoHash [20]byte) (peers []peering.Peer, err error) {
 	raddr, err := net.ResolveUDPAddr("udp", url)
 	if err != nil {
 		return

@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"bytes"
+	"client/peering"
 	"encoding/binary"
 	"fmt"
 	"net/http"
@@ -14,12 +15,12 @@ var httpClient = http.Client{
 	Timeout: 2 * time.Second,
 }
 
-func SendAnnounceHTTP(urlStr string, infoHash string) (peers []Peer, err error) {
+func SendAnnounceHTTP(urlStr string, infoHash string) (peers []peering.Peer, err error) {
 	req, err := http.NewRequest(http.MethodGet, urlStr, nil)
 	if err != nil {
 		return
 	}
-	peerID := GetPeerID()
+	peerID := peering.GetPeerID()
 
 	// Add Get parameters to url
 	q := req.URL.Query()
@@ -51,7 +52,7 @@ func SendAnnounceHTTP(urlStr string, infoHash string) (peers []Peer, err error) 
 	}
 
 	if len(decodedRes.Peers) > 0 {
-		peers = make([]Peer, len(decodedRes.Peers)/6)
+		peers = make([]peering.Peer, len(decodedRes.Peers)/6)
 		err = binary.Read(bytes.NewBuffer(decodedRes.Peers), binary.BigEndian, &peers)
 	}
 	return

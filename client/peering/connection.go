@@ -2,7 +2,6 @@ package peering
 
 import (
 	"bytes"
-	"client/tracker"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -16,7 +15,7 @@ import (
 // 	peer_id   [20]byte
 // }
 
-func PeerHandshake(peer tracker.Peer, info_hash [20]byte) error {
+func PeerHandshake(peer Peer, info_hash [20]byte) error {
 	tcpAddr := &net.TCPAddr{
 		IP:   net.IPv4(peer.IP[0], peer.IP[1], peer.IP[2], peer.IP[3]),
 		Port: int(peer.Port),
@@ -30,7 +29,7 @@ func PeerHandshake(peer tracker.Peer, info_hash [20]byte) error {
 	fmt.Println("Connected to", tcpAddr)
 
 	protocolString := []byte("BitTorrent protocol") // string to determine Bittorrent protocol v1.0
-	peerId := tracker.GetPeerID()
+	peerId := GetPeerID()
 
 	// Set up the handshake message
 	message := bytes.NewBuffer(make([]byte, 0, 49+len(protocolString)))
