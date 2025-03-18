@@ -4,20 +4,7 @@ go 1.23.2
 
 require github.com/zeebo/bencode v1.0.0
 
-require (
-	github.com/google/go-cmp v0.6.0 // indirect
-	github.com/kr/text v0.2.0 // indirect
-	golang.org/x/exp/typeparams v0.0.0-20221212164502-fae10dda9338 // indirect
-	golang.org/x/mod v0.20.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/telemetry v0.0.0-20240829154258-f29ab539cc98 // indirect
-	golang.org/x/tools v0.22.1-0.20240829175637-39126e24d653 // indirect
-	golang.org/x/tools/gopls v0.16.2 // indirect
-	golang.org/x/vuln v1.0.4 // indirect
-	honnef.co/go/tools v0.4.7 // indirect
-	mvdan.cc/gofumpt v0.6.0 // indirect
-	mvdan.cc/xurls/v2 v2.5.0 // indirect
-)
+require github.com/kr/text v0.2.0 // indirect
 
 require (
 	fyne.io/fyne/v2 v2.5.2
