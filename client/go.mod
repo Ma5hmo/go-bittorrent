@@ -2,9 +2,10 @@ module client
 
 go 1.23.2
 
-require github.com/zeebo/bencode v1.0.0
-
-require github.com/kr/text v0.2.0 // indirect
+require (
+	github.com/jackpal/bencode-go v1.0.2 // indirect
+	github.com/kr/text v0.2.0 // indirect
+)
 
 require (
 	fyne.io/fyne/v2 v2.5.2

@@ -1,16 +1,32 @@
 package peering
 
-import "math/rand/v2"
+import (
+	"encoding/binary"
+	"fmt"
+	"net"
+)
 
 type Peer struct {
-	IP   [4]byte
+	IP   net.IP
 	Port uint16
 }
 
-func GetPeerID() (peerID [20]byte) {
-	peerID = [20]byte{} // create a random peerId (temporarily)
-	for i := 0; i < 20; i++ {
-		peerID[i] = byte(rand.UintN(256))
+func (p *Peer) String() string {
+	return fmt.Sprintf("%s:%d", p.IP.String(), p.Port)
+}
+
+func Unmarshal(peersBin []byte) ([]Peer, error) {
+	const peerSize = 6 // 4 for IP, 2 for port
+	numPeers := len(peersBin) / peerSize
+	if len(peersBin)%peerSize != 0 {
+		err := fmt.Errorf("received malformed peers")
+		return nil, err
 	}
-	return
+	peers := make([]Peer, numPeers)
+	for i := 0; i < numPeers; i++ {
+		offset := i * peerSize
+		peers[i].IP = net.IP(peersBin[offset : offset+4])
+		peers[i].Port = binary.BigEndian.Uint16(peersBin[offset+4 : offset+6])
+	}
+	return peers, nil
 }

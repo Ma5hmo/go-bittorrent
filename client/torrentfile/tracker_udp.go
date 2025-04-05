@@ -1,4 +1,4 @@
-package tracker
+package torrentfile
 
 import (
 	"bytes"
@@ -83,12 +83,14 @@ func sendConnectUDP(conn *net.UDPConn) (connectionID uint64, err error) {
 	return
 }
 
-func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash [20]byte) (peers []peering.Peer, err error) {
+func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash *[20]byte,
+	port uint16, peerID *[20]byte) (peers []peering.Peer, err error) {
 	const BUFF_SIZE = 1024
 	const HEADER_LENGTH = 20
+	const PEERS_RETURNED = (BUFF_SIZE - HEADER_LENGTH) / 6
 
-	req := newAnnounceRequestUDP(connectionID, infoHash, peering.GetPeerID(), 0, 1000, 0, 2,
-		[4]byte{0}, 6881, 10) // (BUFF_SIZE-HEADER_LENGTH)/6)
+	req := newAnnounceRequestUDP(connectionID, *infoHash, *peerID, 0, 1000, 0, 2,
+		[4]byte{0}, port, PEERS_RETURNED)
 
 	err = binary.Write(conn, binary.BigEndian, req)
 	if err != nil {
@@ -96,7 +98,7 @@ func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash [20]byte) 
 	}
 	fmt.Println("Sent out announce request: ", req)
 
-	resBytes := bytes.NewBuffer(make([]byte, 1024))
+	resBytes := bytes.NewBuffer(make([]byte, BUFF_SIZE))
 	bytesRead, err := conn.Read(resBytes.Bytes())
 	if err != nil {
 		return
@@ -122,8 +124,8 @@ func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash [20]byte) 
 	return
 }
 
-func SendUDPRequest(url string, infoHash [20]byte) (peers []peering.Peer, err error) {
-	raddr, err := net.ResolveUDPAddr("udp", url)
+func (t *TorrentFile) requestPeersUDP(port uint16, peerID *[20]byte) (peers []peering.Peer, err error) {
+	raddr, err := net.ResolveUDPAddr("udp", t.Announce)
 	if err != nil {
 		return
 	}
@@ -142,7 +144,7 @@ func SendUDPRequest(url string, infoHash [20]byte) (peers []peering.Peer, err er
 	if err != nil {
 		return
 	}
-	peers, err = sendAnnounceUDP(conn, connectionID, infoHash)
+	peers, err = sendAnnounceUDP(conn, connectionID, &t.InfoHash, port, peerID)
 	if err != nil {
 		return
 	}

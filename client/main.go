@@ -1,99 +1,100 @@
-package main
+// package main
 
-import (
-	"os"
+// import (
+// 	"client/peering"
+// 	"client/torrentfile"
+// 	"client/tracker"
+// 	"encoding/hex"
+// 	"fmt"
+// 	"log"
+// 	"os"
+// 	"strings"
+// )
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/theme"
-	"fyne.io/fyne/v2/widget"
-)
+// /*
+// // func showMessage(window fyne.Window, message string) {
+// // 	dialog := widget.NewLabel(message)
+// // 	window.SetContent(container.NewVBox(
+// // 		dialog,
+// // 		widget.NewButton("Close", func() {
+// // 			window.Close()
+// // 		}),
+// // 	))
+// // 	window.Show()
+// // }
 
-func showMessage(window fyne.Window, message string) {
-	dialog := widget.NewLabel(message)
-	window.SetContent(container.NewVBox(
-		dialog,
-		widget.NewButton("Close", func() {
-			window.Close()
-		}),
-	))
-	window.Show()
-}
+// // // func main() {
+// // // 	// Create the application
+// // // 	myApp := app.New()
+// // // 	myWindow := myApp.NewWindow("BitTorrent App")
 
-func main() {
-	// Create the application
-	myApp := app.New()
-	myWindow := myApp.NewWindow("BitTorrent App")
+// // // 	// Create a toolbar with basic actions
+// // // 	toolbar := widget.NewToolbar(
+// // // 		widget.NewToolbarAction(theme.FileIcon(), func() {
+// // // 			// Add torrent action
+// // // 			dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+// // // 				if err != nil {
+// // // 					showMessage(myWindow, "Error: "+err.Error())
+// // // 					return
+// // // 				}
+// // // 				if reader == nil {
+// // // 					showMessage(myWindow, "No file selected")
+// // // 					return
+// // // 				}
+// // // 				defer reader.Close()
 
-	// Create a toolbar with basic actions
-	toolbar := widget.NewToolbar(
-		widget.NewToolbarAction(theme.FileIcon(), func() {
-			// Add torrent action
-			dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
-				if err != nil {
-					showMessage(myWindow, "Error: "+err.Error())
-					return
-				}
-				if reader == nil {
-					showMessage(myWindow, "No file selected")
-					return
-				}
-				defer reader.Close()
+// // // 				// Read the file content
+// // // 				data, err := os.ReadFile(reader.URI().Path())
+// // // 				if err != nil {
+// // // 					showMessage(myWindow, "Failed to read file: "+err.Error())
+// // // 					return
+// // // 				}
+// // // 				showMessage(myWindow, "File content: "+string(data))
+// // // 			}, myWindow).Show()
+// // // 		}),
+// // // 		widget.NewToolbarAction(theme.MediaPlayIcon(), func() {
+// // // 			// Start torrent action
+// // // 			showMessage(myWindow, "Start Torrent")
+// // // 		}),
+// // // 		widget.NewToolbarAction(theme.MediaPauseIcon(), func() {
+// // // 			// Stop torrent action
+// // // 			showMessage(myWindow, "Stop Torrent")
+// // // 		}),
+// // // 	)
 
-				// Read the file content
-				data, err := os.ReadFile(reader.URI().Path())
-				if err != nil {
-					showMessage(myWindow, "Failed to read file: "+err.Error())
-					return
-				}
-				showMessage(myWindow, "File content: "+string(data))
-			}, myWindow).Show()
-		}),
-		widget.NewToolbarAction(theme.MediaPlayIcon(), func() {
-			// Start torrent action
-			showMessage(myWindow, "Start Torrent")
-		}),
-		widget.NewToolbarAction(theme.MediaPauseIcon(), func() {
-			// Stop torrent action
-			showMessage(myWindow, "Stop Torrent")
-		}),
-	)
+// // // 	// Create a list for torrents
+// // // 	torrentList := widget.NewList(
+// // // 		func() int {
+// // // 			return 10 // Dummy list length
+// // // 		},
+// // // 		func() fyne.CanvasObject {
+// // // 			return widget.NewLabel("Torrent Item")
+// // // 		},
+// // // 		func(id widget.ListItemID, obj fyne.CanvasObject) {
+// // // 			obj.(*widget.Label).SetText("Torrent " + string(id+'0'))
+// // // 		},
+// // // 	)
 
-	// Create a list for torrents
-	torrentList := widget.NewList(
-		func() int {
-			return 10 // Dummy list length
-		},
-		func() fyne.CanvasObject {
-			return widget.NewLabel("Torrent Item")
-		},
-		func(id widget.ListItemID, obj fyne.CanvasObject) {
-			obj.(*widget.Label).SetText("Torrent " + string(id+'0'))
-		},
-	)
+// // // 	// Details panel
+// // // 	detailPanel := widget.NewMultiLineEntry()
+// // // 	detailPanel.SetText("Select torrent to see details")
 
-	// Details panel
-	detailPanel := widget.NewMultiLineEntry()
-	detailPanel.SetText("Select torrent to see details")
+// // // 	// Layout content
+// // // 	mainContent := container.NewHSplit(
+// // // 		torrentList,
+// // // 		container.NewVBox(
+// // // 			widget.NewLabel("Details"),
+// // // 			detailPanel,
+// // // 		),
+// // // 	)
+// // // 	mainContent.SetOffset(0.3)
 
-	// Layout content
-	mainContent := container.NewHSplit(
-		torrentList,
-		container.NewVBox(
-			widget.NewLabel("Details"),
-			detailPanel,
-		),
-	)
-	mainContent.SetOffset(0.3)
-
-	// Set up the main window content
-	myWindow.SetContent(container.NewBorder(toolbar, nil, nil, nil, mainContent))
-	myWindow.Resize(fyne.NewSize(800, 600))
-	myWindow.ShowAndRun()
-}
-
+// // // 	// Set up the main window content
+// // // 	myWindow.SetContent(container.NewBorder(toolbar, nil, nil, nil, mainContent))
+// // // 	myWindow.Resize(fyne.NewSize(800, 600))
+// // // 	myWindow.ShowAndRun()
+// // // }
+// */
 // func main() {
 // 	file, err := os.Open("../exampletorrents/rdr.torrent")
 // 	if err != nil {
@@ -101,7 +102,7 @@ func main() {
 // 	}
 // 	defer file.Close()
 
-// 	announces, infoHash, err := torrent.DecodeTorrent(file)
+// 	announces, infoHash, err := torrentfile.Open(file).toTorrentFile()
 // 	if err != nil {
 // 		fmt.Println("Error decoding torrent file:", err)
 // 	}

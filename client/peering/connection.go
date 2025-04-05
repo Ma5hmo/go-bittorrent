@@ -1,50 +1,47 @@
 package peering
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"net"
+	"time"
 )
 
-// type PeerHandshakeMessage struct {
-// 	pstrlen uint8
-// 	// Protocol String here in length pstrlen
-// 	reserved  [8]byte
-// 	info_hash [20]byte
-// 	peer_id   [20]byte
-// }
+// A Handshake is a special message that a peer uses to identify itself
+type Handshake struct {
+	Pstr     string
+	InfoHash [20]byte
+	PeerID   [20]byte
+}
 
-func PeerHandshake(peer Peer, info_hash [20]byte) error {
-	tcpAddr := &net.TCPAddr{
-		IP:   net.IPv4(peer.IP[0], peer.IP[1], peer.IP[2], peer.IP[3]),
-		Port: int(peer.Port),
-	}
+// Serialize serializes the handshake to a buffer
+func (h *Handshake) Serialize() []byte {
+	buf := make([]byte, len(h.Pstr)+49)
+	buf[0] = byte(len(h.Pstr))
+	curr := 1
+	curr += copy(buf[curr:], h.Pstr)
+	curr += copy(buf[curr:], make([]byte, 8)) // 8 reserved bytes
+	curr += copy(buf[curr:], h.InfoHash[:])
+	curr += copy(buf[curr:], h.PeerID[:])
+	return buf
+}
 
-	conn, err := net.DialTCP("tcp", nil, tcpAddr)
+func (h *Handshake) Send(peer Peer) error {
+
+	conn, err := net.DialTimeout("tcp", peer.String(), 3*time.Second)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	fmt.Println("Connected to", tcpAddr)
+	fmt.Println("Connected to", peer)
 
-	protocolString := []byte("BitTorrent protocol") // string to determine Bittorrent protocol v1.0
-	peerId := GetPeerID()
+	message := h.Serialize()
 
-	// Set up the handshake message
-	message := bytes.NewBuffer(make([]byte, 0, 49+len(protocolString)))
-	binary.Write(message, binary.BigEndian, uint8(len(protocolString))) // pstrlen
-	binary.Write(message, binary.BigEndian, protocolString)             // pstr
-	binary.Write(message, binary.BigEndian, [8]byte{0})                 // reserved bytes
-	binary.Write(message, binary.BigEndian, info_hash)                  // info hash of the torrent
-	binary.Write(message, binary.BigEndian, peerId)                     // this client's peer ID
-
-	_, err = conn.Write(message.Bytes())
+	_, err = conn.Write(message)
 	if err != nil {
 		fmt.Println("Error sending data:", err)
 		return err
 	}
-	fmt.Println("Message sent to client:", message.Bytes())
+	// fmt.Println("Message sent to client:", message)
 
 	buffer := make([]byte, 1024)
 	n, err := conn.Read(buffer)
@@ -52,6 +49,7 @@ func PeerHandshake(peer Peer, info_hash [20]byte) error {
 		fmt.Println("Error reading data:", err)
 		return err
 	}
+
 	fmt.Println("Client responded to handshake:", buffer[:n])
 	// Start requesting pieces...
 	return nil
