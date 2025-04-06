@@ -2,7 +2,7 @@ package torrentfile
 
 import (
 	"bytes"
-	"client/peering"
+	"client/peer"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -84,7 +84,7 @@ func sendConnectUDP(conn *net.UDPConn) (connectionID uint64, err error) {
 }
 
 func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash *[20]byte,
-	port uint16, peerID *[20]byte) (peers []peering.Peer, err error) {
+	port uint16, peerID *[20]byte) (peers []peer.Peer, err error) {
 	const BUFF_SIZE = 1024
 	const HEADER_LENGTH = 20
 	const PEERS_RETURNED = (BUFF_SIZE - HEADER_LENGTH) / 6
@@ -119,12 +119,12 @@ func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash *[20]byte,
 		return
 	}
 
-	peers = make([]peering.Peer, (bytesRead-HEADER_LENGTH)/6)
+	peers = make([]peer.Peer, (bytesRead-HEADER_LENGTH)/6)
 	err = binary.Read(resBytes, binary.BigEndian, &peers)
 	return
 }
 
-func (t *TorrentFile) requestPeersUDP(port uint16, peerID *[20]byte) (peers []peering.Peer, err error) {
+func (t *TorrentFile) requestPeersUDP(port uint16, peerID *[20]byte) (peers []peer.Peer, err error) {
 	raddr, err := net.ResolveUDPAddr("udp", t.Announce)
 	if err != nil {
 		return

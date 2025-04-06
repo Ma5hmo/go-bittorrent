@@ -1,11 +1,11 @@
 package torrentfile
 
 import (
-	"client/peering"
+	"client/peer"
 	"strings"
 )
 
-func (t *TorrentFile) RequestPeers(peerID *[20]byte, port uint16) ([]peering.Peer, error) {
+func (t *TorrentFile) RequestPeers(peerID *[20]byte, port uint16) ([]peer.Peer, error) {
 	if strings.HasPrefix(t.Announce, "udp:") {
 		return t.requestPeersUDP(port, peerID)
 	}

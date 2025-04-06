@@ -1,7 +1,7 @@
 package torrentfile
 
 import (
-	"client/peering"
+	"client/peer"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -33,7 +33,7 @@ func (t *TorrentFile) buildTrackerURL(peerID *[20]byte, port uint16) (string, er
 	return base.String(), nil
 }
 
-func (t *TorrentFile) requestPeersHTTP(peerID *[20]byte, port uint16) ([]peering.Peer, error) {
+func (t *TorrentFile) requestPeersHTTP(peerID *[20]byte, port uint16) ([]peer.Peer, error) {
 	// Build the tracker URL
 	url, err := t.buildTrackerURL(peerID, port)
 	if err != nil {
@@ -53,5 +53,5 @@ func (t *TorrentFile) requestPeersHTTP(peerID *[20]byte, port uint16) ([]peering
 		return nil, err
 	}
 
-	return peering.Unmarshal([]byte(trackerResp.Peers))
+	return peer.Unmarshal([]byte(trackerResp.Peers))
 }
