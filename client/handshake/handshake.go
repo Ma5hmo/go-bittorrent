@@ -1,4 +1,4 @@
-package peering
+package handshake
 
 import (
 	"fmt"
@@ -10,6 +10,15 @@ type Handshake struct {
 	Pstr     string
 	InfoHash [20]byte
 	PeerID   [20]byte
+}
+
+// New creates a new handshake with the standard pstr
+func New(infoHash, peerID [20]byte) *Handshake {
+	return &Handshake{
+		Pstr:     "BitTorrent protocol",
+		InfoHash: infoHash,
+		PeerID:   peerID,
+	}
 }
 
 // Serialize serializes the handshake to a buffer
@@ -56,33 +65,3 @@ func Read(r io.Reader) (*Handshake, error) {
 
 	return &h, nil
 }
-
-// func (h *Handshake) Send(peer peering.Peer) error {
-
-// 	conn, err := net.DialTimeout("tcp", peer.String(), 3*time.Second)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer conn.Close()
-// 	fmt.Println("Connected to", peer)
-
-// 	message := h.Serialize()
-
-// 	_, err = conn.Write(message)
-// 	if err != nil {
-// 		fmt.Println("Error sending data:", err)
-// 		return err
-// 	}
-// 	// fmt.Println("Message sent to client:", message)
-
-// 	buffer := make([]byte, 1024)
-// 	n, err := conn.Read(buffer)
-// 	if err != nil {
-// 		fmt.Println("Error reading data:", err)
-// 		return err
-// 	}
-
-// 	fmt.Println("Client responded to handshake:", buffer[:n])
-// 	// Start requesting pieces...
-// 	return nil
-// }
