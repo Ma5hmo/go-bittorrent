@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jackpal/bencode-go"
+	"github.com/zeebo/bencode"
 )
 
 // TorrentFile encodes the metadata from a .torrent file
@@ -27,9 +27,9 @@ type bencodeInfo struct {
 }
 
 type bencodeTorrent struct {
-	Announce     string      `bencode:"announce"`
-	AnnounceList [][]string  `bencode:"announce-list"`
-	Info         bencodeInfo `bencode:"info"`
+	Announce     string             `bencode:"announce"`
+	AnnounceList [][]string         `bencode:"announce-list"`
+	InfoRaw      bencode.RawMessage `bencode:"info"`
 }
 
 // Open parses a torrent file
@@ -41,21 +41,24 @@ func Open(path string) (TorrentFile, error) {
 	defer file.Close()
 
 	bto := bencodeTorrent{}
-	err = bencode.Unmarshal(file, &bto)
+	err = bencode.NewDecoder(file).Decode(&bto)
 	if err != nil {
 		return TorrentFile{}, err
 	}
 	return bto.toTorrentFile()
 }
 
-func (i *bencodeInfo) hash() ([20]byte, error) {
-	var buf bytes.Buffer
-	err := bencode.Marshal(&buf, *i)
+func (b *bencodeTorrent) hash() [20]byte {
+	return sha1.Sum([]byte(b.InfoRaw))
+}
+
+func (b *bencodeTorrent) getInfo() (*bencodeInfo, error) {
+	bi := &bencodeInfo{}
+	err := bencode.NewDecoder(bytes.NewReader(b.InfoRaw)).Decode(bi)
 	if err != nil {
-		return [20]byte{}, err
+		return nil, err
 	}
-	h := sha1.Sum(buf.Bytes())
-	return h, nil
+	return bi, nil
 }
 
 func (i *bencodeInfo) splitPieceHashes() ([][20]byte, error) {
@@ -75,14 +78,17 @@ func (i *bencodeInfo) splitPieceHashes() ([][20]byte, error) {
 }
 
 func (bto *bencodeTorrent) toTorrentFile() (TorrentFile, error) {
-	infoHash, err := bto.Info.hash()
+	infoHash := bto.hash()
+	info, err := bto.getInfo()
 	if err != nil {
 		return TorrentFile{}, err
 	}
-	pieceHashes, err := bto.Info.splitPieceHashes()
+
+	pieceHashes, err := info.splitPieceHashes()
 	if err != nil {
 		return TorrentFile{}, err
 	}
+
 	fixedAnnounceList := []string{bto.Announce}
 	for _, arr := range bto.AnnounceList {
 		if len(arr) == 1 {
@@ -93,9 +99,9 @@ func (bto *bencodeTorrent) toTorrentFile() (TorrentFile, error) {
 		AnnounceList: fixedAnnounceList,
 		InfoHash:     infoHash,
 		PieceHashes:  pieceHashes,
-		PieceLength:  bto.Info.PieceLength,
-		Length:       bto.Info.Length,
-		Name:         bto.Info.Name,
+		PieceLength:  info.PieceLength,
+		Length:       info.Length,
+		Name:         info.Name,
 	}
 	return t, nil
 }

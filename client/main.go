@@ -1,3 +1,54 @@
+package main
+
+import (
+	"client/torrent"
+	"client/torrentfile"
+	"crypto/rand"
+	"log"
+	"os"
+)
+
+func createPeerId() *[20]byte {
+	var b [20]byte
+	_, err := rand.Read(b[:])
+	if err != nil {
+		log.Fatal("Failed to generate random bytes:", err)
+	}
+	return &b
+}
+
+func writeToFile(filename string, data []byte) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.Write(data) // convert [20]byte to []byte
+	return err
+}
+
+func main() {
+	tf, err := torrentfile.Open("../exampletorrents/rdr.torrent")
+	if err != nil {
+		log.Fatalf("opening torrent - %v", err)
+	}
+	log.Printf("infohash - %x", tf.InfoHash)
+	peerId := createPeerId()
+	port := uint16(6881)
+	t, err := torrent.New(&tf, peerId, port)
+	if err != nil {
+		log.Fatalf("create torrent - %v", err)
+	}
+	log.Println("PEERS FOUND: ", t.Peers)
+	buf := t.Download()
+	err = writeToFile("../downloaded.bin", buf)
+	if err != nil {
+		log.Fatalf("writing to file - %v", err)
+	}
+	log.Printf("END")
+}
+
 // package main
 
 // import (
