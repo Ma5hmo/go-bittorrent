@@ -11,12 +11,12 @@ import (
 
 // TorrentFile encodes the metadata from a .torrent file
 type TorrentFile struct {
-	Announce    string
-	InfoHash    [20]byte
-	PieceHashes [][20]byte
-	PieceLength int
-	Length      int
-	Name        string
+	AnnounceList []string
+	InfoHash     [20]byte
+	PieceHashes  [][20]byte
+	PieceLength  int
+	Length       int
+	Name         string
 }
 
 type bencodeInfo struct {
@@ -27,8 +27,9 @@ type bencodeInfo struct {
 }
 
 type bencodeTorrent struct {
-	Announce string      `bencode:"announce"`
-	Info     bencodeInfo `bencode:"info"`
+	Announce     string      `bencode:"announce"`
+	AnnounceList [][]string  `bencode:"announce-list"`
+	Info         bencodeInfo `bencode:"info"`
 }
 
 // Open parses a torrent file
@@ -82,13 +83,19 @@ func (bto *bencodeTorrent) toTorrentFile() (TorrentFile, error) {
 	if err != nil {
 		return TorrentFile{}, err
 	}
+	fixedAnnounceList := []string{bto.Announce}
+	for _, arr := range bto.AnnounceList {
+		if len(arr) == 1 {
+			fixedAnnounceList = append(fixedAnnounceList, arr[0])
+		}
+	}
 	t := TorrentFile{
-		Announce:    bto.Announce,
-		InfoHash:    infoHash,
-		PieceHashes: pieceHashes,
-		PieceLength: bto.Info.PieceLength,
-		Length:      bto.Info.Length,
-		Name:        bto.Info.Name,
+		AnnounceList: fixedAnnounceList,
+		InfoHash:     infoHash,
+		PieceHashes:  pieceHashes,
+		PieceLength:  bto.Info.PieceLength,
+		Length:       bto.Info.Length,
+		Name:         bto.Info.Name,
 	}
 	return t, nil
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand/v2"
 	"net"
 	"time"
@@ -66,14 +67,14 @@ func sendConnectUDP(conn *net.UDPConn) (connectionID uint64, err error) {
 	if err != nil {
 		return
 	}
-	fmt.Println("Sent out connect request: ", reqObject)
+	log.Println("Sent out connect request: ", reqObject)
 
 	resObject := new(connectResponseUDP)
 	err = binary.Read(conn, binary.BigEndian, resObject)
 	if err != nil {
 		return
 	}
-	fmt.Println("Got connect response: ", resObject)
+	log.Println("Got connect response: ", resObject)
 
 	if resObject.TransactionID != reqObject.TransactionID || resObject.Action != 0 {
 		err = errors.New("invalid response from tracker")
@@ -96,18 +97,16 @@ func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash *[20]byte,
 	if err != nil {
 		return
 	}
-	fmt.Println("Sent out announce request: ", req)
+	log.Println("Sent out announce request: ", req)
 
 	resBytes := bytes.NewBuffer(make([]byte, BUFF_SIZE))
 	bytesRead, err := conn.Read(resBytes.Bytes())
-	if err != nil {
+	if err != nil || bytesRead == HEADER_LENGTH {
 		return
 	}
+	log.Printf("Recieved announce response: %v", resBytes.Bytes())
 	if bytesRead < HEADER_LENGTH {
-		err = errors.New("unexpected response length of announce response")
-		return
-	}
-	if bytesRead == HEADER_LENGTH {
+		err = fmt.Errorf("unexpected response length of announce response - %v < %v", bytesRead, HEADER_LENGTH)
 		return
 	}
 
@@ -124,8 +123,15 @@ func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash *[20]byte,
 	return
 }
 
-func (t *TorrentFile) requestPeersUDP(port uint16, peerID *[20]byte) (peers []peer.Peer, err error) {
-	raddr, err := net.ResolveUDPAddr("udp", t.Announce)
+func (t *TorrentFile) requestPeersUDP(port uint16, peerID *[20]byte,
+	announce string) (peers []peer.Peer, err error) {
+	var announceAddress string
+	if len(announce) > len("udp://") {
+		announceAddress = announce[len("udp://"):]
+	} else {
+		announceAddress = announce
+	}
+	raddr, err := net.ResolveUDPAddr("udp", announceAddress)
 	if err != nil {
 		return
 	}
@@ -134,6 +140,7 @@ func (t *TorrentFile) requestPeersUDP(port uint16, peerID *[20]byte) (peers []pe
 	if err != nil {
 		return
 	}
+	log.Printf("Dialed to %v", raddr)
 	defer conn.Close()
 
 	err = conn.SetDeadline(time.Now().Add(5 * time.Second))
