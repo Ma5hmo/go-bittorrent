@@ -29,7 +29,7 @@ func writeToFile(filename string, data []byte) error {
 }
 
 func main() {
-	tf, err := torrentfile.Open("../exampletorrents/rdr.torrent")
+	tf, err := torrentfile.Open("../exampletorrents/debian.torrent")
 	if err != nil {
 		log.Fatalf("opening torrent - %v", err)
 	}
@@ -40,7 +40,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("create torrent - %v", err)
 	}
-	log.Println("PEERS FOUND: ", t.Peers)
 	buf := t.Download()
 	err = writeToFile("../downloaded.bin", buf)
 	if err != nil {

@@ -60,6 +60,7 @@ func New(tf *torrentfile.TorrentFile, peerID *[20]byte, port uint16) (*Torrent, 
 		Length:      tf.Length,
 		Name:        tf.Name,
 		PieceLength: tf.PieceLength,
+		InfoHash:    tf.InfoHash,
 	}, nil
 }
 
@@ -106,39 +107,43 @@ func (s *pieceStatus) recieveData() error {
 }
 
 func attemptDownloadPiece(c *connection.Connection, pw *pieceWork) ([]byte, error) {
-	status := pieceStatus{
+	state := pieceStatus{
 		connection: c,
 		pieceIndex: pw.index,
 		buf:        make([]byte, pw.length),
 	}
 
-	// set a deadline for this piece
+	// Setting a deadline helps get unresponsive peers unstuck.
+	// 30 seconds is more than enough time to download a 262 KB piece
 	c.Conn.SetDeadline(time.Now().Add(30 * time.Second))
-	defer c.Conn.SetDeadline(time.Time{})
+	defer c.Conn.SetDeadline(time.Time{}) // Disable the deadline
 
-	for status.downloaded < pw.length {
-		if !status.connection.Choked {
-			for status.backlog < MaxBacklog && status.requested < pw.length {
-				reqSize := MaxBlockSize
-				if status.downloaded+MaxBlockSize > pw.length {
-					reqSize = pw.length - status.downloaded
+	for state.downloaded < pw.length {
+		// If unchoked, send requests until we have enough unfulfilled requests
+		if !state.connection.Choked {
+			for state.backlog < MaxBacklog && state.requested < pw.length {
+				blockSize := MaxBlockSize
+				// Last block might be shorter than the typical block
+				if pw.length-state.requested < blockSize {
+					blockSize = pw.length - state.requested
 				}
 
-				err := c.SendRequest(pw.index, status.downloaded, reqSize)
+				err := c.SendRequest(pw.index, state.requested, blockSize)
 				if err != nil {
 					return nil, err
 				}
-				status.requested += reqSize
-				status.backlog++
+				state.backlog++
+				state.requested += blockSize
 			}
 		}
 
-		err := status.recieveData()
+		err := state.recieveData()
 		if err != nil {
 			return nil, err
 		}
 	}
-	return status.buf, nil
+
+	return state.buf, nil
 }
 
 func checkIntegrity(pw *pieceWork, buf []byte) error {
@@ -153,7 +158,7 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 	resultsQueue chan *pieceResult) {
 	c, err := connection.New(peer, t.PeerID, t.InfoHash)
 	if err != nil {
-		log.Printf("Could not handshake with %s. Disconnecting\n", peer.IP)
+		log.Printf("Could not handshake with %s - %s\n", peer.IP, err)
 		return
 	}
 	defer c.Conn.Close()

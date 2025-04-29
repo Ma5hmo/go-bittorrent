@@ -3,6 +3,7 @@ package handshake
 import (
 	"fmt"
 	"io"
+	"log"
 )
 
 // A Handshake is a special message that a peer uses to identify itself
@@ -14,6 +15,7 @@ type Handshake struct {
 
 // New creates a new handshake with the standard pstr
 func New(infoHash, peerID [20]byte) *Handshake {
+	log.Printf("peerid %v", peerID)
 	return &Handshake{
 		Pstr:     "BitTorrent protocol",
 		InfoHash: infoHash,
@@ -24,10 +26,11 @@ func New(infoHash, peerID [20]byte) *Handshake {
 // Serialize serializes the handshake to a buffer
 func (h *Handshake) Serialize() []byte {
 	buf := make([]byte, len(h.Pstr)+49)
+	reserved := [8]byte{0}
 	buf[0] = byte(len(h.Pstr))
 	curr := 1
 	curr += copy(buf[curr:], h.Pstr)
-	curr += copy(buf[curr:], make([]byte, 8)) // 8 reserved bytes
+	curr += copy(buf[curr:], reserved[:]) // 8 reserved bytes
 	curr += copy(buf[curr:], h.InfoHash[:])
 	curr += copy(buf[curr:], h.PeerID[:])
 	return buf

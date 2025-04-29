@@ -102,17 +102,17 @@ func (m *Message) ParsePiece(index int, buf []byte) (int, error) {
 	if len(m.Payload) < 8 {
 		return 0, fmt.Errorf("piece message length is less than 8: %d", len(m.Payload))
 	}
-	parsedIndex := int(binary.BigEndian.Uint32(buf[0:4]))
+	parsedIndex := int(binary.BigEndian.Uint32(m.Payload[0:4]))
 	if parsedIndex != index {
-		return 0, fmt.Errorf("parsed piece index %x doesnt match expected index %x", parsedIndex, index)
+		return 0, fmt.Errorf("parsed piece index %d doesnt match expected index %d", parsedIndex, index)
 	}
-	start := int(binary.BigEndian.Uint32(buf[4:8]))
+	start := int(binary.BigEndian.Uint32(m.Payload[4:8]))
 	if start >= len(buf) {
-		return 0, fmt.Errorf("receieved start offset too high - %x >= %x", start, len(buf))
+		return 0, fmt.Errorf("receieved start offset too high - %d >= %d", start, len(buf))
 	}
 	data := m.Payload[8:]
 	if start+len(data) > len(buf) {
-		return 0, fmt.Errorf("data too long (%x) for offset %x with length %x", len(data), start, len(buf))
+		return 0, fmt.Errorf("data too long (%d) for offset %d with length %d", len(data), start, len(buf))
 	}
 	copy(buf[start:], data)
 	return len(data), nil
