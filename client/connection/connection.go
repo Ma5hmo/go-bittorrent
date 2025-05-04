@@ -7,7 +7,6 @@ import (
 	"client/message"
 	"client/peer"
 	"fmt"
-	"log"
 	"net"
 	"time"
 )
@@ -18,17 +17,17 @@ type Connection struct {
 	Choked   bool
 	Bitfield bitfield.Bitfield
 	peer     peer.Peer
-	infoHash [20]byte
-	peerID   [20]byte
+	infoHash *[20]byte
+	peerID   *[20]byte
 }
 
-func completeHandshake(conn net.Conn, infohash, peerID [20]byte) (*handshake.Handshake, error) {
+func completeHandshake(conn net.Conn, infohash, peerID *[20]byte) (*handshake.Handshake, error) {
 	conn.SetDeadline(time.Now().Add(10 * time.Second))
 	defer conn.SetDeadline(time.Time{}) // Disable the deadline
 
 	req := handshake.New(infohash, peerID)
 	_, err := conn.Write(req.Serialize())
-	log.Printf("Written - %v, err - %v", req.Serialize(), err)
+	// log.Printf("Written - %v, err - %v", req.Serialize(), err)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +62,7 @@ func recvBitfield(conn net.Conn) (bitfield.Bitfield, error) {
 	return msg.Payload, nil
 }
 
-func New(peer peer.Peer, peerID [20]byte, infoHash [20]byte) (*Connection, error) {
+func New(peer peer.Peer, peerID *[20]byte, infoHash *[20]byte) (*Connection, error) {
 	conn, err := net.DialTimeout("tcp", peer.String(), 3*time.Second)
 	if err != nil {
 		return nil, err

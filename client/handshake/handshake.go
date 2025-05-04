@@ -3,19 +3,17 @@ package handshake
 import (
 	"fmt"
 	"io"
-	"log"
 )
 
 // A Handshake is a special message that a peer uses to identify itself
 type Handshake struct {
 	Pstr     string
-	InfoHash [20]byte
-	PeerID   [20]byte
+	InfoHash *[20]byte
+	PeerID   *[20]byte
 }
 
 // New creates a new handshake with the standard pstr
-func New(infoHash, peerID [20]byte) *Handshake {
-	log.Printf("peerid %v", peerID)
+func New(infoHash, peerID *[20]byte) *Handshake {
 	return &Handshake{
 		Pstr:     "BitTorrent protocol",
 		InfoHash: infoHash,
@@ -62,8 +60,8 @@ func Read(r io.Reader) (*Handshake, error) {
 
 	h := Handshake{
 		Pstr:     string(handshakeBuf[0:pstrlen]),
-		InfoHash: infoHash,
-		PeerID:   peerID,
+		InfoHash: &infoHash,
+		PeerID:   &peerID,
 	}
 
 	return &h, nil

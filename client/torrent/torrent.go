@@ -8,18 +8,23 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"log"
-	"runtime"
 	"time"
 )
 
 type Torrent struct {
-	Peers       []peer.Peer
-	PeerID      [20]byte
-	InfoHash    [20]byte
-	PieceHashes [][20]byte
-	PieceLength int
-	Length      int
-	Name        string
+	Peers          []peer.Peer
+	PeerID         [20]byte
+	InfoHash       [20]byte
+	PieceHashes    [][20]byte
+	PieceLength    int
+	Length         int
+	Name           string
+	DownloadStatus *TorrentStatus
+}
+
+type TorrentStatus struct {
+	DonePieces  int
+	PeersAmount int
 }
 
 type pieceWork struct {
@@ -54,13 +59,14 @@ func New(tf *torrentfile.TorrentFile, peerID *[20]byte, port uint16) (*Torrent, 
 		return nil, err
 	}
 	return &Torrent{
-		Peers:       peers,
-		PeerID:      *peerID,
-		PieceHashes: tf.PieceHashes,
-		Length:      tf.Length,
-		Name:        tf.Name,
-		PieceLength: tf.PieceLength,
-		InfoHash:    tf.InfoHash,
+		Peers:          peers,
+		PeerID:         *peerID,
+		PieceHashes:    tf.PieceHashes,
+		Length:         tf.Length,
+		Name:           tf.Name,
+		PieceLength:    tf.PieceLength,
+		InfoHash:       tf.InfoHash,
+		DownloadStatus: nil,
 	}, nil
 }
 
@@ -83,6 +89,10 @@ func (s *pieceStatus) recieveData() error {
 	msg, err := s.connection.Read()
 	if err != nil {
 		return err
+	}
+	// read returns nil for a keep alive message
+	if msg == nil {
+		return nil
 	}
 	switch msg.ID {
 	case message.MsgChoke:
@@ -156,9 +166,10 @@ func checkIntegrity(pw *pieceWork, buf []byte) error {
 
 func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 	resultsQueue chan *pieceResult) {
-	c, err := connection.New(peer, t.PeerID, t.InfoHash)
+	c, err := connection.New(peer, &t.PeerID, &t.InfoHash)
 	if err != nil {
 		log.Printf("Could not handshake with %s - %s\n", peer.IP, err)
+		t.DownloadStatus.PeersAmount--
 		return
 	}
 	defer c.Conn.Close()
@@ -177,6 +188,7 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 		if err != nil {
 			log.Println("Exiting", err)
 			workQueue <- pw // Put piece back on the queue
+			t.DownloadStatus.PeersAmount--
 			return
 		}
 
@@ -190,12 +202,15 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 		c.SendHave(pw.index)
 		resultsQueue <- &pieceResult{pw.index, buf}
 	}
+	t.DownloadStatus.PeersAmount--
 }
 
 func (t *Torrent) Download() []byte {
 	// Init queues for workers to retrieve work and send results
 	workQueue := make(chan *pieceWork, len(t.PieceHashes))
 	results := make(chan *pieceResult)
+	t.DownloadStatus = &TorrentStatus{DonePieces: 0, PeersAmount: len(t.Peers)}
+
 	for index, hash := range t.PieceHashes {
 		length := t.calculatePieceSize(index)
 		workQueue <- &pieceWork{index, length, &hash}
@@ -208,18 +223,20 @@ func (t *Torrent) Download() []byte {
 
 	// Collect results into a buffer until full
 	buf := make([]byte, t.Length)
-	donePieces := 0
-	for donePieces < len(t.PieceHashes) {
+	for t.DownloadStatus.DonePieces < len(t.PieceHashes) {
 		res := <-results
 		begin, end := t.calculateBoundsForPiece(res.index)
 		copy(buf[begin:end], res.buf)
-		donePieces++
+		t.DownloadStatus.DonePieces++
 
 		// TEMPORARILY
-		percent := float64(donePieces) / float64(len(t.PieceHashes)) * 100
-		numWorkers := runtime.NumGoroutine() - 1 // subtract 1 for main thread
-		log.Printf("(%0.2f%%) Downloaded piece #%d from %d peers\n", percent, res.index, numWorkers)
+		percent := t.CalculateDownloadPercentage()
+		log.Printf("(%0.2f%%) Downloaded piece #%d from %d peers\n", percent, res.index, t.DownloadStatus.PeersAmount)
 	}
 	close(workQueue)
 	return buf
+}
+
+func (t *Torrent) CalculateDownloadPercentage() float64 {
+	return float64(t.DownloadStatus.DonePieces) / float64(len(t.PieceHashes)) * 100
 }
