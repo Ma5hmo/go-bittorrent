@@ -2,6 +2,7 @@ package view
 
 import (
 	"client/torrent"
+	"client/torrent/torrentstatus"
 	"fmt"
 
 	"fyne.io/fyne/v2"
@@ -30,12 +31,12 @@ func createTorrentWidgetList(detailContainer *fyne.Container) *widget.List {
 		},
 	)
 	torrentListView.list.OnSelected = func(id widget.ListItemID) {
-		t := torrentListView.torrents[id]
-		torrentListView.selected = &t
+		t := &torrentListView.torrents[id]
+		torrentListView.selected = t
 
 		status := t.DownloadStatus
 		if status == nil {
-			status = &torrent.TorrentStatus{DonePieces: 0, PeersAmount: 0}
+			status = &torrentstatus.TorrentStatus{DonePieces: 0, PeersAmount: 0}
 		}
 		// Clear old details
 		detailContainer.Objects = []fyne.CanvasObject{

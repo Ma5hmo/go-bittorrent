@@ -4,6 +4,7 @@ import (
 	"client/connection"
 	"client/message"
 	"client/peer"
+	"client/torrent/torrentstatus"
 	"client/torrentfile"
 	"crypto/sha1"
 	"fmt"
@@ -19,12 +20,7 @@ type Torrent struct {
 	PieceLength    int
 	Length         int
 	Name           string
-	DownloadStatus *TorrentStatus
-}
-
-type TorrentStatus struct {
-	DonePieces  int
-	PeersAmount int
+	DownloadStatus *torrentstatus.TorrentStatus
 }
 
 type pieceWork struct {
@@ -169,7 +165,7 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 	c, err := connection.New(peer, &t.PeerID, &t.InfoHash)
 	if err != nil {
 		log.Printf("Could not handshake with %s - %s\n", peer.IP, err)
-		t.DownloadStatus.PeersAmount--
+		t.DownloadStatus.DecrementPeersAmount()
 		return
 	}
 	defer c.Conn.Close()
@@ -188,7 +184,7 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 		if err != nil {
 			log.Println("Exiting", err)
 			workQueue <- pw // Put piece back on the queue
-			t.DownloadStatus.PeersAmount--
+			t.DownloadStatus.DecrementPeersAmount()
 			return
 		}
 
@@ -202,14 +198,14 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 		c.SendHave(pw.index)
 		resultsQueue <- &pieceResult{pw.index, buf}
 	}
-	t.DownloadStatus.PeersAmount--
+	t.DownloadStatus.DecrementPeersAmount()
 }
 
 func (t *Torrent) Download() []byte {
 	// Init queues for workers to retrieve work and send results
 	workQueue := make(chan *pieceWork, len(t.PieceHashes))
 	results := make(chan *pieceResult)
-	t.DownloadStatus = &TorrentStatus{DonePieces: 0, PeersAmount: len(t.Peers)}
+	t.DownloadStatus = &torrentstatus.TorrentStatus{DonePieces: 0, PeersAmount: len(t.Peers)}
 
 	for index, hash := range t.PieceHashes {
 		length := t.calculatePieceSize(index)
@@ -227,16 +223,16 @@ func (t *Torrent) Download() []byte {
 		res := <-results
 		begin, end := t.calculateBoundsForPiece(res.index)
 		copy(buf[begin:end], res.buf)
-		t.DownloadStatus.DonePieces++
+		t.DownloadStatus.IncrementDonePieces()
+		percent := t.CalculateDownloadPercentage()
 
 		// TEMPORARILY
-		percent := t.CalculateDownloadPercentage()
-		log.Printf("(%0.2f%%) Downloaded piece #%d from %d peers\n", percent, res.index, t.DownloadStatus.PeersAmount)
+		log.Printf("(%0.2f%%) Downloaded piece #%d from %d peers\n", percent, res.index, t.DownloadStatus.GetPeersAmount())
 	}
 	close(workQueue)
 	return buf
 }
 
 func (t *Torrent) CalculateDownloadPercentage() float64 {
-	return float64(t.DownloadStatus.DonePieces) / float64(len(t.PieceHashes)) * 100
+	return float64(t.DownloadStatus.GetDonePieces()) / float64(len(t.PieceHashes)) * 100
 }
