@@ -54,6 +54,9 @@ func createTorrentWidgetList(detailContainer *fyne.Container) *widget.List {
 			widget.NewLabelWithStyle("Downloaded Pieces:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabel(fmt.Sprintf("%d", status.DonePieces)),
 		}
+		torrentListView.list.OnUnselected = func(id widget.ListItemID) {
+			// make it go unselected (selected = nil and update gui)
+		}
 		detailContainer.Refresh()
 	}
 	return torrentListView.list
