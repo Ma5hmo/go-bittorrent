@@ -5,6 +5,7 @@ import (
 	"client/torrent"
 	"client/torrentfile"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -30,21 +31,26 @@ func onClickOpenFile() {
 	// }
 	// defer reader.Close()
 	// reader.URI().Path()
-	tf, err := torrentfile.Open("../exampletorrents/debian.torrent")
+
+	tf, err := torrentfile.Open("../exampletorrents/ubuntu.torrent")
 	if err != nil {
 		showMessage("Error parsing torrent:\n" + err.Error())
 		return
 	}
-
-	t, err := torrent.New(&tf, &common.AppState.PeerID, common.AppState.Port)
-	if err != nil {
-		showMessage("Failed to create torrent:\n" + err.Error())
-		return
-	}
-
-	torrentListView.torrents = append(torrentListView.torrents, *t)
-	torrentListView.list.Refresh()
 	// }, mainWindow).Show()
+
+	go func() {
+		t, err := torrent.New(&tf, &common.AppState.PeerID, common.AppState.Port)
+		if err != nil {
+			showMessage("Failed to create torrent:\n" + err.Error())
+			return
+		}
+
+		torrentListView.torrents = append(torrentListView.torrents, *t)
+		fyne.Do(func() {
+			torrentListView.list.Refresh()
+		})
+	}()
 }
 
 // func main() {

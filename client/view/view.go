@@ -43,14 +43,16 @@ func CreateMainWindow() {
 
 func showMessage(message string) {
 	// Use the same app as the parent window
-	newWindow := mainApp.NewWindow("Message")
-	dialog := widget.NewLabel(message)
-	newWindow.SetContent(container.NewVBox(
-		dialog,
-		widget.NewButton("Close", func() {
-			newWindow.Close()
-		}),
-	))
-	newWindow.Resize(fyne.NewSize(300, 150))
-	newWindow.Show()
+	fyne.Do(func() {
+		newWindow := mainApp.NewWindow("Message")
+		dialog := widget.NewLabel(message)
+		newWindow.SetContent(container.NewVBox(
+			dialog,
+			widget.NewButton("Close", func() {
+				newWindow.Close()
+			}),
+		))
+		newWindow.Resize(fyne.NewSize(300, 150))
+		newWindow.Show()
+	})
 }
