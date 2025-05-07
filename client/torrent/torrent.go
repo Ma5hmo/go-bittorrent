@@ -13,14 +13,17 @@ import (
 )
 
 type Torrent struct {
+	*torrentfile.TorrentFile
+	DownloadStatus *torrentstatus.TorrentStatus
 	Peers          []peer.Peer
 	PeerID         [20]byte
-	InfoHash       [20]byte
-	PieceHashes    [][20]byte
-	PieceLength    int
-	Length         int
-	Name           string
-	DownloadStatus *torrentstatus.TorrentStatus
+	Port           uint16
+	// Retrieved from TorrentFile:
+	// InfoHash       [20]byte
+	// PieceHashes    [][20]byte
+	// PieceLength    int
+	// Length         int
+	// Name           string
 }
 
 type pieceWork struct {
@@ -50,19 +53,12 @@ const MaxBlockSize = 0x4000
 const MaxBacklog = 5
 
 func New(tf *torrentfile.TorrentFile, peerID *[20]byte, port uint16) (*Torrent, error) {
-	peers, err := tf.RequestPeers(peerID, port)
-	if err != nil {
-		return nil, err
-	}
 	return &Torrent{
-		Peers:          peers,
-		PeerID:         *peerID,
-		PieceHashes:    tf.PieceHashes,
-		Length:         tf.Length,
-		Name:           tf.Name,
-		PieceLength:    tf.PieceLength,
-		InfoHash:       tf.InfoHash,
+		TorrentFile:    tf,
 		DownloadStatus: nil,
+		Peers:          nil,
+		PeerID:         *peerID,
+		Port:           port,
 	}, nil
 }
 
@@ -201,7 +197,13 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 	t.DownloadStatus.DecrementPeersAmount()
 }
 
-func (t *Torrent) Download() []byte {
+func (t *Torrent) Download() ([]byte, error) {
+	var err error
+	t.Peers, err = t.RequestPeers(&t.PeerID, t.Port)
+	if err != nil {
+		return nil, err
+	}
+
 	// Init queues for workers to retrieve work and send results
 	workQueue := make(chan *pieceWork, len(t.PieceHashes))
 	results := make(chan *pieceResult)
@@ -230,7 +232,7 @@ func (t *Torrent) Download() []byte {
 		log.Printf("(%0.2f%%) Downloaded piece #%d from %d peers\n", percent, res.index, t.DownloadStatus.GetPeersAmount())
 	}
 	close(workQueue)
-	return buf
+	return buf, nil
 }
 
 func (t *Torrent) CalculateDownloadPercentage() float64 {

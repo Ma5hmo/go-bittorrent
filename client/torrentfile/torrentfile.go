@@ -17,6 +17,7 @@ type TorrentFile struct {
 	PieceLength  int
 	Length       int
 	Name         string
+	Started      bool
 }
 
 type bencodeInfo struct {
@@ -102,6 +103,7 @@ func (bto *bencodeTorrent) toTorrentFile() (TorrentFile, error) {
 		PieceLength:  info.PieceLength,
 		Length:       info.Length,
 		Name:         info.Name,
+		Started:      false,
 	}
 	return t, nil
 }
