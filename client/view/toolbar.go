@@ -4,21 +4,27 @@ import (
 	"client/common"
 	"client/torrent"
 	"client/torrentfile"
+	"client/view/torrentlist"
 
-	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
-func createMainToolbar() *widget.Toolbar {
+func createMainToolbar(tl *torrentlist.TorrentList) *widget.Toolbar {
 	return widget.NewToolbar(
-		widget.NewToolbarAction(theme.FileIcon(), onClickOpenFile),
-		widget.NewToolbarAction(theme.MediaPlayIcon(), onClickStartTorrent),
-		widget.NewToolbarAction(theme.MediaPauseIcon(), onClickStopTorrent),
+		widget.NewToolbarAction(theme.FileIcon(), func() {
+			openTorrent(tl)
+		}),
+		widget.NewToolbarAction(theme.MediaPlayIcon(), func() {
+			startTorrent(tl)
+		}),
+		widget.NewToolbarAction(theme.MediaPauseIcon(), func() {
+			stopTorrent(tl)
+		}),
 	)
 }
 
-func onClickOpenFile() {
+func openTorrent(tl *torrentlist.TorrentList) {
 	// Add torrent action
 	// dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
 	// if err != nil {
@@ -32,7 +38,7 @@ func onClickOpenFile() {
 	// defer reader.Close()
 	// reader.URI().Path()
 
-	tf, err := torrentfile.Open("../exampletorrents/ubuntu.torrent")
+	tf, err := torrentfile.Open("../exampletorrents/debian.torrent")
 	if err != nil {
 		showMessage("Error parsing torrent:\n" + err.Error())
 		return
@@ -46,42 +52,20 @@ func onClickOpenFile() {
 			return
 		}
 
-		torrentListView.torrents = append(torrentListView.torrents, *t)
-		fyne.Do(func() {
-			torrentListView.list.Refresh()
-		})
+		tl.AddTorrent(t)
 	}()
 }
 
-// func main() {
-// 	tf, err := torrentfile.Open("../exampletorrents/debian.torrent")
-// 	if err != nil {
-// 		log.Fatalf("opening torrent - %v", err)
-// 	}
-// 	log.Printf("infohash - %x", tf.InfoHash)
-// 	peerId := createPeerId()
-// 	port := uint16(6881)
-// 	t, err := torrent.New(&tf, peerId, port)
-// 	if err != nil {
-// 		log.Fatalf("create torrent - %v", err)
-// 	}
-// 	buf := t.Download()
-// 	err = writeToFile("../downloaded.bin", buf)
-// 	if err != nil {
-// 		log.Fatalf("writing to file - %v", err)
-// 	}
-// 	log.Printf("END")
-// }
-
-func onClickStartTorrent() {
+func startTorrent(tl *torrentlist.TorrentList) {
 	go func() {
-		if torrentListView.selected == nil {
+		if tl.Selected == nil {
 			return
 		}
-		torrentListView.selected.Download()
+		tl.Selected.Download() // blocking
+		// TODO: WRITE TO FILE
 	}()
 }
 
-func onClickStopTorrent() {
+func stopTorrent(tl *torrentlist.TorrentList) {
 	showMessage("Stop Torrent")
 }

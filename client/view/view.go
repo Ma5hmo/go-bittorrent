@@ -1,6 +1,8 @@
 package view
 
 import (
+	"client/view/torrentlist"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
@@ -23,11 +25,11 @@ func CreateMainWindow() {
 	)
 
 	// Create a list for torrents
-	torrentWidgetList := createTorrentWidgetList(detailPanel)
+	torrentList := torrentlist.New(detailPanel)
 
 	// Layout content
 	mainContent := container.NewHSplit(
-		torrentWidgetList,
+		torrentList.Widgets,
 		container.NewVBox(
 			widget.NewLabel("Details"),
 			detailPanel,
