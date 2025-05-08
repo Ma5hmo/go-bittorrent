@@ -17,7 +17,6 @@ func CreateMainWindow() {
 	mainApp = app.New()
 	mainWindow = mainApp.NewWindow("GoTorrent")
 	// Create a toolbar with basic actions
-	toolbar := createMainToolbar()
 
 	// Details panel
 	detailPanel := container.NewVBox(
@@ -26,6 +25,7 @@ func CreateMainWindow() {
 
 	// Create a list for torrents
 	torrentList := torrentlist.New(detailPanel)
+	toolbar := createMainToolbar(torrentList)
 
 	// Layout content
 	mainContent := container.NewHSplit(

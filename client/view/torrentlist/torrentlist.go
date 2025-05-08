@@ -23,6 +23,7 @@ type TorrentList struct {
 func New(detailContainer *fyne.Container) *TorrentList {
 	tl := new(TorrentList)
 	tl.quit = make(chan struct{})
+	tl.detailContainer = detailContainer
 
 	tl.Widgets = widget.NewList(
 		func() int {
@@ -39,7 +40,6 @@ func New(detailContainer *fyne.Container) *TorrentList {
 
 	tl.Widgets.OnSelected = func(id widget.ListItemID) {
 		ticker := time.NewTicker(500 * time.Millisecond)
-		close(tl.quit)
 		go func() {
 			for {
 				select {
@@ -82,26 +82,30 @@ func (tl *TorrentList) GetTorrent(index int) *torrent.Torrent {
 
 func (tl *TorrentList) showTorrentOnContainer(index int) {
 	tl.Selected = tl.GetTorrent(index)
-	if tl.Selected == nil {
-		tl.detailContainer.Refresh()
+	if tl.Selected == nil || tl.Selected.TorrentFile == nil {
+		fyne.DoAndWait(func() {
+			tl.detailContainer.Refresh()
+		})
 		return
 	}
 	status := tl.Selected.DownloadStatus
 	if status == nil {
 		status = &torrentstatus.TorrentStatus{DonePieces: 0, PeersAmount: 0}
 	}
-	// Clear old details
-	tl.detailContainer.Objects = []fyne.CanvasObject{
-		widget.NewLabelWithStyle("Name:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabel(tl.Selected.Name),
-		widget.NewLabelWithStyle("Length:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabel(fmt.Sprintf("%d bytes", tl.Selected.Length)),
-		widget.NewLabelWithStyle("Pieces:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabel(fmt.Sprintf("%d", len(tl.Selected.PieceHashes))),
-		widget.NewLabelWithStyle("Peers:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabel(fmt.Sprintf("%d", status.PeersAmount)),
-		widget.NewLabelWithStyle("Downloaded Pieces:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabel(fmt.Sprintf("%d", status.DonePieces)),
-	}
-	tl.detailContainer.Refresh()
+	fyne.DoAndWait(func() {
+		// Clear old details
+		tl.detailContainer.Objects = []fyne.CanvasObject{
+			widget.NewLabelWithStyle("Name:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			widget.NewLabel(tl.Selected.Name),
+			widget.NewLabelWithStyle("Length:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			widget.NewLabel(fmt.Sprintf("%d bytes", tl.Selected.Length)),
+			widget.NewLabelWithStyle("Pieces:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			widget.NewLabel(fmt.Sprintf("%d", len(tl.Selected.PieceHashes))),
+			widget.NewLabelWithStyle("Peers:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			widget.NewLabel(fmt.Sprintf("%d", status.PeersAmount)),
+			widget.NewLabelWithStyle("Downloaded Pieces:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			widget.NewLabel(fmt.Sprintf("%d", status.DonePieces)),
+		}
+		tl.detailContainer.Refresh()
+	})
 }
