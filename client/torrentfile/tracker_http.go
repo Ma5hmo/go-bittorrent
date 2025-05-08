@@ -1,20 +1,20 @@
 package torrentfile
 
 import (
-	"bytes"
 	"client/peer"
 	"log"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/zeebo/bencode"
 )
 
 type bencodeTrackerResp struct {
-	Interval int                `bencode:"interval"`
-	Peers    bencode.RawMessage `bencode:"peers"`
+	Interval int    `bencode:"interval"`
+	Peers    string `bencode:"peers"`
 }
 
 func (t *TorrentFile) buildTrackerURL(peerID *[20]byte, port uint16, announce string) (string, error) {
@@ -63,10 +63,10 @@ func (t *TorrentFile) requestPeersHTTP(port uint16, peerID *[20]byte, announce s
 
 	// Fallback: try to decode as dictionary model
 	var dictPeers []map[string]interface{}
-	err = bencode.NewDecoder(bytes.NewReader(trackerResp.Peers)).Decode(&dictPeers)
+	err = bencode.NewDecoder(strings.NewReader(trackerResp.Peers)).Decode(&dictPeers)
 	log.Printf("dictpeers - %v", dictPeers)
 	if err != nil {
-		log.Printf("Couldnt decode as dict - %v", err)
+		log.Printf("Couldnt decode as dict - %v, DATA=%s", err, trackerResp.Peers)
 		return nil, err
 	}
 
