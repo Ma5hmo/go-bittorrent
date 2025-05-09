@@ -9,6 +9,7 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"log"
+	"os"
 	"time"
 )
 
@@ -18,6 +19,7 @@ type Torrent struct {
 	Peers          []peer.Peer
 	PeerID         [20]byte
 	Port           uint16
+	Path           string
 	// Retrieved from TorrentFile:
 	// InfoHash       [20]byte
 	// PieceHashes    [][20]byte
@@ -59,6 +61,7 @@ func New(tf *torrentfile.TorrentFile, peerID *[20]byte, port uint16) (*Torrent, 
 		Peers:          nil,
 		PeerID:         *peerID,
 		Port:           port,
+		Path:           "",
 	}, nil
 }
 
@@ -197,11 +200,22 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 	t.DownloadStatus.DecrementPeersAmount()
 }
 
-func (t *Torrent) Download() ([]byte, error) {
+func (t *Torrent) Download(output *os.File) error {
 	var err error
+	if output != nil {
+		t.Path = output.Name()
+	} else if t.Path != "" {
+		output, err = os.OpenFile(t.Path, os.O_WRONLY|os.O_CREATE, 0666)
+		if err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("no file is presented to Download")
+	}
+
 	t.Peers, err = t.RequestPeers(&t.PeerID, t.Port)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Init queues for workers to retrieve work and send results
@@ -220,21 +234,28 @@ func (t *Torrent) Download() ([]byte, error) {
 	}
 
 	// Collect results into a buffer until full
-	buf := make([]byte, t.Length)
+	// buf := make([]byte, t.Length)
 	for t.DownloadStatus.DonePieces < len(t.PieceHashes) {
 		res := <-results
 		begin, end := t.calculateBoundsForPiece(res.index)
-		copy(buf[begin:end], res.buf)
+
+		// copy(buf[begin:end], res.buf)
 		t.DownloadStatus.IncrementDonePieces()
 		percent := t.CalculateDownloadPercentage()
 
 		// TEMPORARILY
 		log.Printf("(%0.2f%%) Downloaded piece #%d from %d peers\n", percent, res.index, t.DownloadStatus.GetPeersAmount())
+		if _, err := output.WriteAt(res.buf[:end-begin], int64(begin)); err != nil {
+			return err
+		}
 	}
 	close(workQueue)
-	return buf, nil
+	return nil
 }
 
 func (t *Torrent) CalculateDownloadPercentage() float64 {
+	if t.DownloadStatus == nil {
+		return 0
+	}
 	return float64(t.DownloadStatus.GetDonePieces()) / float64(len(t.PieceHashes)) * 100
 }

@@ -1,7 +1,9 @@
 package view
 
 import (
+	"client/view/toolbar"
 	"client/view/torrentlist"
+	"client/view/viewutils"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -9,13 +11,10 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-var mainApp fyne.App
-var mainWindow fyne.Window
-
 func CreateMainWindow() {
 	// Create the application
-	mainApp = app.New()
-	mainWindow = mainApp.NewWindow("GoTorrent")
+	viewutils.MainApp = app.NewWithID("com.itaydali.gotorrent")
+	viewutils.MainWindow = viewutils.MainApp.NewWindow("GoTorrent")
 	// Create a toolbar with basic actions
 
 	// Details panel
@@ -25,7 +24,7 @@ func CreateMainWindow() {
 
 	// Create a list for torrents
 	torrentList := torrentlist.New(detailPanel)
-	toolbar := createMainToolbar(torrentList)
+	tb := toolbar.New(torrentList)
 
 	// Layout content
 	mainContent := container.NewHSplit(
@@ -38,23 +37,7 @@ func CreateMainWindow() {
 	mainContent.SetOffset(0.3)
 
 	// Set up the main window content
-	mainWindow.SetContent(container.NewBorder(toolbar, nil, nil, nil, mainContent))
-	mainWindow.Resize(fyne.NewSize(800, 600))
-	mainWindow.ShowAndRun()
-}
-
-func showMessage(message string) {
-	// Use the same app as the parent window
-	fyne.Do(func() {
-		newWindow := mainApp.NewWindow("Message")
-		dialog := widget.NewLabel(message)
-		newWindow.SetContent(container.NewVBox(
-			dialog,
-			widget.NewButton("Close", func() {
-				newWindow.Close()
-			}),
-		))
-		newWindow.Resize(fyne.NewSize(300, 150))
-		newWindow.Show()
-	})
+	viewutils.MainWindow.SetContent(container.NewBorder(tb, nil, nil, nil, mainContent))
+	viewutils.MainWindow.Resize(fyne.NewSize(800, 600))
+	viewutils.MainWindow.ShowAndRun()
 }
