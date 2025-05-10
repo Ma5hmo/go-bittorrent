@@ -2,7 +2,6 @@ package torrentlist
 
 import (
 	"client/torrent"
-	"client/torrent/torrentstatus"
 	"fmt"
 	"sync"
 	"time"
@@ -58,9 +57,15 @@ func New(detailContainer *fyne.Container) *TorrentList {
 	)
 
 	tl.Widgets.OnSelected = func(id widget.ListItemID) {
-		close(tl.quit)
+		select {
+		case <-tl.quit:
+			// Channel already closed, do nothing
+		default:
+			close(tl.quit)
+		}
 		tl.quit = make(chan struct{})
 		ticker := time.NewTicker(500 * time.Millisecond)
+		tl.updateDetailWidgets(id)
 		go func() {
 			for {
 				select {
@@ -75,8 +80,12 @@ func New(detailContainer *fyne.Container) *TorrentList {
 	}
 
 	tl.Widgets.OnUnselected = func(id widget.ListItemID) {
-		close(tl.quit)
-		// make it go unselected (selected = nil and update gui)
+		select {
+		case <-tl.quit:
+			// Channel already closed, do nothing
+		default:
+			close(tl.quit)
+		}
 		tl.Selected = nil
 		tl.detailContainer.Objects = []fyne.CanvasObject{}
 		fyne.Do(func() {
@@ -114,34 +123,44 @@ func (tl *TorrentList) updateDetailWidgets(index int) {
 	if tl.Selected == nil || tl.Selected.TorrentFile == nil {
 		return
 	}
-	status := tl.Selected.DownloadStatus
-	if status == nil {
-		status = &torrentstatus.TorrentStatus{}
-	}
-	percentage := tl.Selected.CalculateDownloadPercentage()
-	fyne.Do(func() {
-		if len(tl.detailContainer.Objects) == 0 {
-			// Set detailContainer only once
-			tl.detailContainer.Objects = []fyne.CanvasObject{
-				widget.NewLabelWithStyle("Name:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-				tl.detailWidgets.NameLabel,
-				widget.NewLabelWithStyle("Length:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-				tl.detailWidgets.LengthLabel,
-				widget.NewLabelWithStyle("Pieces:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-				tl.detailWidgets.PiecesLabel,
-				widget.NewLabelWithStyle("Peers:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-				tl.detailWidgets.PeersLabel,
-				widget.NewLabelWithStyle("Downloaded Pieces:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-				tl.detailWidgets.DownloadedLabel,
-				tl.detailWidgets.ProgressBar,
-			}
-		}
 
-		tl.detailWidgets.NameLabel.SetText(tl.Selected.Name)
-		tl.detailWidgets.LengthLabel.SetText(fmt.Sprintf("%d bytes", tl.Selected.Length))
-		tl.detailWidgets.PiecesLabel.SetText(fmt.Sprintf("%d", len(tl.Selected.PieceHashes)))
-		tl.detailWidgets.PeersLabel.SetText(fmt.Sprintf("%d", status.PeersAmount))
-		tl.detailWidgets.DownloadedLabel.SetText(fmt.Sprintf("%d", status.DonePieces))
-		tl.detailWidgets.ProgressBar.SetValue(percentage)
+	fyne.Do(func() {
+		tl.setupDetailContainer()
+		tl.updateDetailLabels()
 	})
+}
+
+func (tl *TorrentList) setupDetailContainer() {
+	if len(tl.detailContainer.Objects) == 0 {
+		tl.detailContainer.Objects = []fyne.CanvasObject{
+			widget.NewLabelWithStyle("Name:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			tl.detailWidgets.NameLabel,
+			widget.NewLabelWithStyle("Length:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			tl.detailWidgets.LengthLabel,
+			widget.NewLabelWithStyle("Pieces:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			tl.detailWidgets.PiecesLabel,
+		}
+	}
+	if tl.Selected.DownloadStatus != nil && len(tl.detailContainer.Objects) == 6 {
+		// download started and the detail container havent been updated yet
+		tl.detailContainer.Objects = append(tl.detailContainer.Objects,
+			widget.NewLabelWithStyle("Peers:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			tl.detailWidgets.PeersLabel,
+			widget.NewLabelWithStyle("Downloaded Pieces:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			tl.detailWidgets.DownloadedLabel,
+			tl.detailWidgets.ProgressBar)
+	}
+}
+
+func (tl *TorrentList) updateDetailLabels() {
+	percentage := tl.Selected.CalculateDownloadPercentage()
+	tl.detailWidgets.NameLabel.SetText(tl.Selected.Name)
+	tl.detailWidgets.LengthLabel.SetText(fmt.Sprintf("%d bytes", tl.Selected.Length))
+	tl.detailWidgets.PiecesLabel.SetText(fmt.Sprintf("%d", len(tl.Selected.PieceHashes)))
+
+	if tl.Selected.DownloadStatus != nil {
+		tl.detailWidgets.PeersLabel.SetText(fmt.Sprintf("%d", tl.Selected.DownloadStatus.PeersAmount))
+		tl.detailWidgets.DownloadedLabel.SetText(fmt.Sprintf("%d", tl.Selected.DownloadStatus.DonePieces))
+		tl.detailWidgets.ProgressBar.SetValue(percentage)
+	}
 }
