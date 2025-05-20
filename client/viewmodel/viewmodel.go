@@ -7,10 +7,12 @@ import (
 )
 
 func StartTorrent(t *torrent.Torrent, fileOutput *os.File) {
-	defer fileOutput.Close()
-	err := t.Download(fileOutput)
+	if fileOutput != nil {
+		defer fileOutput.Close()
+	}
+	err := t.StartDownload(fileOutput)
 	if err != nil {
-		log.Printf("error - %s", err.Error())
+		log.Printf("error starting download - %s", err.Error())
 	}
 
 	// update it to being done or smth

@@ -7,7 +7,6 @@ import (
 	"client/view/torrentlist"
 	"client/view/viewutils"
 	"client/viewmodel"
-	"log"
 	"os"
 
 	"fyne.io/fyne/v2"
@@ -16,41 +15,44 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-func New(tl *torrentlist.TorrentList) *widget.Toolbar {
-	return widget.NewToolbar(
-		widget.NewToolbarAction(theme.FileIcon(), func() {
-			openTorrent(tl)
-		}),
-		widget.NewToolbarAction(theme.MediaPlayIcon(), func() {
-			startTorrent(tl)
-		}),
-		widget.NewToolbarAction(theme.MediaPauseIcon(), func() {
-			stopTorrent(tl)
-		}),
-	)
+type Toolbar struct {
+	torrentList *torrentlist.TorrentList
+	widget      *widget.Toolbar
 }
 
-func openTorrent(tl *torrentlist.TorrentList) {
-	// Add torrent action
+func New(tl *torrentlist.TorrentList) *widget.Toolbar {
+	tb := &Toolbar{
+		torrentList: tl,
+	}
+
+	tb.widget = widget.NewToolbar(
+		widget.NewToolbarAction(theme.FileIcon(), tb.handleOpenTorrent),
+		widget.NewToolbarAction(theme.DownloadIcon(), tb.handleStartTorrent),
+		widget.NewToolbarAction(theme.MediaPlayIcon(), tb.handleResumeTorrent),
+		widget.NewToolbarAction(theme.MediaPauseIcon(), tb.handleStopTorrent),
+	)
+
+	return tb.widget
+}
+
+func (tb *Toolbar) handleOpenTorrent() {
 	// dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
 	// if err != nil {
-	// 	viewutils.ShowMessage("Error opening file:\n" + err.Error())
-	// 	return
+	//  viewutils.ShowMessage("Error opening file:\n" + err.Error())
+	//  return
 	// }
 	// if reader == nil {
-	// 	viewutils.ShowMessage("No file selected")
-	// 	return
+	//  viewutils.ShowMessage("No file selected")
+	//  return
 	// }
 	// defer reader.Close()
-	// reader.URI().Path()
-
+	// // use reader.URI().Path() to open a torrentfile
+	// )}
 	tf, err := torrentfile.Open("../exampletorrents/debian.torrent")
 	if err != nil {
 		viewutils.ShowMessage("Error parsing torrent:\n" + err.Error())
 		return
 	}
-	// }, viewutils.MainWindow).Show()
-
 	go func() {
 		t, err := torrent.New(&tf, &common.AppState.PeerID, common.AppState.Port)
 		if err != nil {
@@ -58,41 +60,84 @@ func openTorrent(tl *torrentlist.TorrentList) {
 			return
 		}
 
-		tl.AddTorrent(t)
+		tb.torrentList.AddTorrent(t)
 	}()
 }
 
-func startTorrent(tl *torrentlist.TorrentList) {
-	var fileOutput *os.File
-	if tl.Selected == nil {
+func (tb *Toolbar) handleStartTorrent() {
+	if tb.torrentList.Selected == nil {
 		viewutils.ShowMessage("No torrent is selected")
 		return
 	}
-
-	onSave := func(u fyne.URIWriteCloser, err error) {
-		if err != nil { // a filesystem error
-			dialog.ShowError(err, viewutils.MainWindow)
-			return
-		}
-		if u == nil { // user pressed “Cancel”
-			return
-		}
-		path := u.URI().Path()
-		u.Close()
-		log.Printf("%s", path)
-		fileOutput, err = os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0666)
-		if err != nil {
-			dialog.ShowError(err, viewutils.MainWindow)
-			return
-		}
-		go viewmodel.StartTorrent(tl.Selected, fileOutput)
+	if tb.torrentList.Selected.Path != "" {
+		viewutils.ShowMessage("Torrent had already started, resume it instead!")
+		return
 	}
 
-	dlg := dialog.NewFileSave(onSave, viewutils.MainWindow)
-	dlg.SetFileName(tl.Selected.Name) // default name
-	dlg.Show()                        // present modal
+	dlg := dialog.NewFileSave(tb.dialogFileSaveHandler, viewutils.MainWindow)
+	dlg.SetFileName(tb.torrentList.Selected.Name)
+	dlg.Show()
 }
 
-func stopTorrent(tl *torrentlist.TorrentList) {
-	viewutils.ShowMessage("Stop Torrent")
+func (tb *Toolbar) handleResumeTorrent() {
+	if tb.torrentList.Selected == nil {
+		viewutils.ShowMessage("No torrent is selected")
+		return
+	}
+	if tb.torrentList.Selected.Path != "" {
+		tb.torrentList.Selected.ResumeDownload()
+		tb.torrentList.ForceUpdateDetails()
+		go viewmodel.StartTorrent(tb.torrentList.Selected, nil)
+		return
+	}
+	dlg := dialog.NewFileOpen(tb.dialogFileOpenHandler, viewutils.MainWindow)
+	dlg.SetFileName(tb.torrentList.Selected.Name)
+	dlg.Show()
+}
+
+func (tb *Toolbar) openAndStartTorrent(path string, createIfNotExists bool) {
+	flags := os.O_RDWR
+	if createIfNotExists {
+		flags |= os.O_CREATE
+	}
+
+	fileOutput, err := os.OpenFile(path, flags, 0666)
+	if err != nil {
+		dialog.ShowError(err, viewutils.MainWindow)
+		return
+	}
+	go viewmodel.StartTorrent(tb.torrentList.Selected, fileOutput)
+}
+
+func (tb *Toolbar) dialogFileSaveHandler(u fyne.URIWriteCloser, err error) {
+	if err != nil { // a filesystem error
+		dialog.ShowError(err, viewutils.MainWindow)
+		return
+	}
+	if u == nil { // user pressed "Cancel"
+		return
+	}
+	path := u.URI().Path()
+	u.Close()
+	tb.openAndStartTorrent(path, true)
+}
+
+func (tb *Toolbar) dialogFileOpenHandler(u fyne.URIReadCloser, err error) {
+	if err != nil { // a filesystem error
+		dialog.ShowError(err, viewutils.MainWindow)
+		return
+	}
+	if u == nil { // user pressed "Cancel"
+		return
+	}
+	path := u.URI().Path()
+	u.Close()
+	tb.openAndStartTorrent(path, false)
+}
+
+func (tb *Toolbar) handleStopTorrent() {
+	if tb.torrentList.Selected != nil {
+		tb.torrentList.Selected.PauseDownload()
+		tb.torrentList.ForceUpdateDetails()
+	}
 }

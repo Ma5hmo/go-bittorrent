@@ -8,6 +8,7 @@ import (
 	"client/torrentfile"
 	"crypto/sha1"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -20,6 +21,7 @@ type Torrent struct {
 	PeerID         [20]byte
 	Port           uint16
 	Path           string
+	Paused         bool
 	// Retrieved from TorrentFile:
 	// InfoHash       [20]byte
 	// PieceHashes    [][20]byte
@@ -173,6 +175,13 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 	c.SendInterested()
 
 	for pw := range workQueue {
+		// Check if download is paused
+		if t.Paused {
+			workQueue <- pw                    // Put piece back on the queue
+			time.Sleep(100 * time.Millisecond) // Sleep briefly before checking again
+			continue
+		}
+
 		if !c.Bitfield.HasPiece(pw.index) {
 			workQueue <- pw // Put piece back on the queue
 			continue
@@ -200,32 +209,103 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 	t.DownloadStatus.DecrementPeersAmount()
 }
 
-func (t *Torrent) Download(output *os.File) error {
+// checkExistingPiece verifies if a piece already exists in the file and is valid
+func (t *Torrent) checkExistingPiece(index int, file *os.File) (bool, error) {
+	begin, end := t.calculateBoundsForPiece(index)
+	pieceSize := end - begin
+
+	// Read the piece from the file
+	buf := make([]byte, pieceSize)
+	_, err := file.ReadAt(buf, int64(begin))
+	if err != nil {
+		if err == io.EOF {
+			return false, nil
+		}
+		return false, err
+	}
+
+	// Verify the piece hash
+	h := sha1.Sum(buf)
+	return h == t.PieceHashes[index], nil
+}
+
+// scanExistingPieces checks which pieces are already downloaded and valid
+func (t *Torrent) scanExistingPieces(file *os.File) (int, error) {
+	donePieces := 0
+	for i := range t.PieceHashes {
+		exists, err := t.checkExistingPiece(i, file)
+		if err != nil {
+			return donePieces, err
+		}
+		if exists {
+			donePieces++
+		}
+	}
+	return donePieces, nil
+}
+
+func (t *Torrent) StartDownload(output *os.File) error {
 	var err error
+	if t.DownloadStatus != nil {
+		if t.DownloadStatus.DonePieces == len(t.PieceHashes) {
+			log.Printf("file is already done")
+		} else {
+			log.Printf("resuming download")
+			t.ResumeDownload()
+		}
+		return nil
+	}
+
 	if output != nil {
 		t.Path = output.Name()
 	} else if t.Path != "" {
-		output, err = os.OpenFile(t.Path, os.O_WRONLY|os.O_CREATE, 0666)
+		output, err = os.OpenFile(t.Path, os.O_RDWR|os.O_CREATE, 0666)
 		if err != nil {
 			return err
 		}
 	} else {
-		return fmt.Errorf("no file is presented to Download")
+		return fmt.Errorf("no file is presented to StartDownload")
+	}
+	defer output.Close()
+
+	// Initialize download status
+	t.DownloadStatus = &torrentstatus.TorrentStatus{DonePieces: 0, PeersAmount: 0}
+
+	// Check for existing pieces
+	existingPieces, err := t.scanExistingPieces(output)
+	if err != nil {
+		return fmt.Errorf("error scanning existing pieces: %v", err)
+	}
+	t.DownloadStatus.DonePieces = existingPieces
+
+	// If all pieces are already downloaded, we're done
+	if existingPieces == len(t.PieceHashes) {
+		log.Println("All pieces already downloaded!")
+		return nil
 	}
 
+	// Get peers
 	t.Peers, err = t.RequestPeers(&t.PeerID, t.Port)
 	if err != nil {
 		return err
 	}
+	t.DownloadStatus.PeersAmount = len(t.Peers)
 
 	// Init queues for workers to retrieve work and send results
 	workQueue := make(chan *pieceWork, len(t.PieceHashes))
 	results := make(chan *pieceResult)
-	t.DownloadStatus = &torrentstatus.TorrentStatus{DonePieces: 0, PeersAmount: len(t.Peers)}
+	t.Paused = false
 
+	// Only queue pieces that haven't been downloaded yet
 	for index, hash := range t.PieceHashes {
-		length := t.calculatePieceSize(index)
-		workQueue <- &pieceWork{index, length, &hash}
+		exists, err := t.checkExistingPiece(index, output)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			length := t.calculatePieceSize(index)
+			workQueue <- &pieceWork{index, length, &hash}
+		}
 	}
 
 	// Start workers
@@ -234,22 +314,34 @@ func (t *Torrent) Download(output *os.File) error {
 	}
 
 	// Collect results into a buffer until full
-	// buf := make([]byte, t.Length)
 	for t.DownloadStatus.DonePieces < len(t.PieceHashes) {
+		if t.Paused {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
 		res := <-results
 		begin, end := t.calculateBoundsForPiece(res.index)
 
-		// copy(buf[begin:end], res.buf)
 		t.DownloadStatus.IncrementDonePieces()
 		percent := t.CalculateDownloadPercentage()
 
-		// TEMPORARILY
 		log.Printf("(%0.2f%%) Downloaded piece #%d from %d peers\n", percent, res.index, t.DownloadStatus.GetPeersAmount())
 		if _, err := output.WriteAt(res.buf[:end-begin], int64(begin)); err != nil {
 			return err
 		}
 	}
 	close(workQueue)
+	return nil
+}
+
+func (t *Torrent) PauseDownload() error {
+	t.Paused = true
+	return nil
+}
+
+func (t *Torrent) ResumeDownload() error {
+	t.Paused = false
 	return nil
 }
 

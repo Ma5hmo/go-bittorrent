@@ -7,47 +7,35 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 )
 
 type TorrentList struct {
-	Widgets         *widget.List
-	Torrents        []*torrent.Torrent
-	Selected        *torrent.Torrent
-	detailContainer *fyne.Container
-	detailWidgets   torrentDetailWidgets
-	mu              sync.RWMutex
-	quit            chan struct{}
+	Widgets  *widget.List
+	Grid     *fyne.Container
+	Progress *widget.ProgressBar
+	Torrents []*torrent.Torrent
+	Selected *torrent.Torrent
+	mu       sync.RWMutex
+	quit     chan struct{}
+	// Store labels for updating
+	labels struct {
+		Name       *widget.Label
+		Length     *widget.Label
+		Pieces     *widget.Label
+		Status     *widget.Label
+		Peers      *widget.Label
+		Downloaded *widget.Label
+	}
 }
 
-// torrentDetailWidgets groups the widgets to be updated dynamically
-type torrentDetailWidgets struct {
-	NameLabel       *widget.Label
-	LengthLabel     *widget.Label
-	PiecesLabel     *widget.Label
-	PeersLabel      *widget.Label
-	DownloadedLabel *widget.Label
-	ProgressBar     *widget.ProgressBar
-}
-
-func New(detailContainer *fyne.Container) *TorrentList {
+func New() *TorrentList {
 	tl := &TorrentList{
-		detailContainer: detailContainer,
-		quit:            make(chan struct{}),
+		quit: make(chan struct{}),
 	}
-	tl.detailWidgets = torrentDetailWidgets{
-		NameLabel:       widget.NewLabel(""),
-		LengthLabel:     widget.NewLabel(""),
-		PiecesLabel:     widget.NewLabel(""),
-		PeersLabel:      widget.NewLabel(""),
-		DownloadedLabel: widget.NewLabel(""),
-		ProgressBar:     widget.NewProgressBar(),
-	}
-	tl.detailWidgets.ProgressBar.Min = 0.0
-	tl.detailWidgets.ProgressBar.Max = 100.0
 
-	detailContainer.Objects = []fyne.CanvasObject{}
-
+	// Initialize the list widget
 	tl.Widgets = widget.NewList(
 		func() int { return len(tl.Torrents) },
 		func() fyne.CanvasObject { return widget.NewLabel("") },
@@ -55,6 +43,10 @@ func New(detailContainer *fyne.Container) *TorrentList {
 			o.(*widget.Label).SetText(tl.Torrents[i].Name)
 		},
 	)
+
+	// Create progress bar
+	tl.Progress = widget.NewProgressBar()
+	tl.Progress.Hide()
 
 	tl.Widgets.OnSelected = func(id widget.ListItemID) {
 		select {
@@ -65,12 +57,14 @@ func New(detailContainer *fyne.Container) *TorrentList {
 		}
 		tl.quit = make(chan struct{})
 		ticker := time.NewTicker(500 * time.Millisecond)
-		tl.updateDetailWidgets(id)
+		tl.Selected = tl.Torrents[id]
+		tl.Progress.Show()
+		tl.updateLabels()
 		go func() {
 			for {
 				select {
 				case <-ticker.C:
-					tl.updateDetailWidgets(id)
+					fyne.Do(tl.updateLabels)
 				case <-tl.quit:
 					ticker.Stop()
 					return
@@ -87,19 +81,106 @@ func New(detailContainer *fyne.Container) *TorrentList {
 			close(tl.quit)
 		}
 		tl.Selected = nil
-		tl.detailContainer.Objects = []fyne.CanvasObject{}
-		fyne.Do(func() {
-			// Clear widget texts when unselected
-			tl.detailWidgets.NameLabel.SetText("")
-			tl.detailWidgets.LengthLabel.SetText("")
-			tl.detailWidgets.PiecesLabel.SetText("")
-			tl.detailWidgets.PeersLabel.SetText("")
-			tl.detailWidgets.DownloadedLabel.SetText("")
-			tl.detailWidgets.ProgressBar.SetValue(0)
-		})
+		tl.Progress.Hide()
+		fyne.Do(tl.updateLabels)
 	}
 
+	// Create initial grid
+	tl.updateGrid()
+
 	return tl
+}
+
+func (tl *TorrentList) updateGrid() {
+	if tl.Grid != nil {
+		tl.Grid.Refresh()
+	}
+
+	// Create header labels
+	headers := []string{"Name", "Length", "Pieces", "Status", "Peers", "Downloaded"}
+	var allLabels []fyne.CanvasObject
+
+	// For each field
+	for _, header := range headers {
+		// Add header label
+		headerLabel := widget.NewLabelWithStyle(header, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		allLabels = append(allLabels, headerLabel)
+
+		// Create value label
+		valueLabel := widget.NewLabel("No torrent selected")
+		switch header {
+		case "Name":
+			tl.labels.Name = valueLabel
+		case "Length":
+			tl.labels.Length = valueLabel
+		case "Pieces":
+			tl.labels.Pieces = valueLabel
+		case "Status":
+			tl.labels.Status = valueLabel
+		case "Peers":
+			tl.labels.Peers = valueLabel
+		case "Downloaded":
+			tl.labels.Downloaded = valueLabel
+		}
+		allLabels = append(allLabels, valueLabel)
+	}
+
+	// Create grid with 2 columns (field name and value)
+	tl.Grid = container.NewGridWithColumns(2, allLabels...)
+	tl.Grid.Refresh()
+}
+
+func (tl *TorrentList) updateLabels() {
+	if tl.Selected == nil {
+		tl.labels.Name.SetText("No torrent selected")
+		tl.labels.Length.SetText("No torrent selected")
+		tl.labels.Pieces.SetText("No torrent selected")
+		tl.labels.Status.SetText("No torrent selected")
+		tl.labels.Peers.SetText("No torrent selected")
+		tl.labels.Downloaded.SetText("No torrent selected")
+		tl.Grid.Refresh()
+		return
+	}
+
+	// Update each label based on the selected torrent
+	tl.labels.Name.SetText(tl.Selected.Name)
+	tl.labels.Length.SetText(fmt.Sprintf("%d bytes", tl.Selected.Length))
+	tl.labels.Pieces.SetText(fmt.Sprintf("%d", len(tl.Selected.PieceHashes)))
+
+	// Status
+	if tl.Selected.DownloadStatus == nil {
+		tl.labels.Status.SetText("Not Started")
+		tl.labels.Status.Importance = widget.MediumImportance
+	} else if tl.Selected.Paused {
+		tl.labels.Status.SetText("⏸️ PAUSED")
+		tl.labels.Status.Importance = widget.HighImportance
+	} else {
+		tl.labels.Status.SetText("▶️ DOWNLOADING")
+		tl.labels.Status.Importance = widget.MediumImportance
+	}
+
+	// Peers
+	if tl.Selected.DownloadStatus == nil {
+		tl.labels.Peers.SetText("0")
+	} else {
+		tl.labels.Peers.SetText(fmt.Sprintf("%d", tl.Selected.DownloadStatus.PeersAmount))
+	}
+
+	// Downloaded
+	if tl.Selected.DownloadStatus == nil {
+		tl.labels.Downloaded.SetText("0")
+	} else {
+		tl.labels.Downloaded.SetText(fmt.Sprintf("%d/%d", tl.Selected.DownloadStatus.DonePieces, len(tl.Selected.PieceHashes)))
+	}
+
+	// Update progress bar
+	if tl.Selected.DownloadStatus != nil {
+		tl.Progress.SetValue(tl.Selected.CalculateDownloadPercentage() / 100.0)
+	} else {
+		tl.Progress.SetValue(0)
+	}
+
+	tl.Grid.Refresh()
 }
 
 func (tl *TorrentList) AddTorrent(t *torrent.Torrent) {
@@ -109,58 +190,11 @@ func (tl *TorrentList) AddTorrent(t *torrent.Torrent) {
 	fyne.Do(tl.Widgets.Refresh)
 }
 
-func (tl *TorrentList) GetTorrent(index int) *torrent.Torrent {
-	tl.mu.RLock()
-	defer tl.mu.RUnlock()
-	if index < 0 || index >= len(tl.Torrents) {
-		return nil
-	}
-	return tl.Torrents[index]
+func (tl *TorrentList) ForceUpdateDetails() {
+	fyne.Do(tl.updateLabels)
 }
 
-func (tl *TorrentList) updateDetailWidgets(index int) {
-	tl.Selected = tl.GetTorrent(index)
-	if tl.Selected == nil || tl.Selected.TorrentFile == nil {
-		return
-	}
-
-	fyne.Do(func() {
-		tl.setupDetailContainer()
-		tl.updateDetailLabels()
-	})
-}
-
-func (tl *TorrentList) setupDetailContainer() {
-	if len(tl.detailContainer.Objects) == 0 {
-		tl.detailContainer.Objects = []fyne.CanvasObject{
-			widget.NewLabelWithStyle("Name:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-			tl.detailWidgets.NameLabel,
-			widget.NewLabelWithStyle("Length:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-			tl.detailWidgets.LengthLabel,
-			widget.NewLabelWithStyle("Pieces:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-			tl.detailWidgets.PiecesLabel,
-		}
-	}
-	if tl.Selected.DownloadStatus != nil && len(tl.detailContainer.Objects) == 6 {
-		// download started and the detail container havent been updated yet
-		tl.detailContainer.Objects = append(tl.detailContainer.Objects,
-			widget.NewLabelWithStyle("Peers:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-			tl.detailWidgets.PeersLabel,
-			widget.NewLabelWithStyle("Downloaded Pieces:", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-			tl.detailWidgets.DownloadedLabel,
-			tl.detailWidgets.ProgressBar)
-	}
-}
-
-func (tl *TorrentList) updateDetailLabels() {
-	percentage := tl.Selected.CalculateDownloadPercentage()
-	tl.detailWidgets.NameLabel.SetText(tl.Selected.Name)
-	tl.detailWidgets.LengthLabel.SetText(fmt.Sprintf("%d bytes", tl.Selected.Length))
-	tl.detailWidgets.PiecesLabel.SetText(fmt.Sprintf("%d", len(tl.Selected.PieceHashes)))
-
-	if tl.Selected.DownloadStatus != nil {
-		tl.detailWidgets.PeersLabel.SetText(fmt.Sprintf("%d", tl.Selected.DownloadStatus.PeersAmount))
-		tl.detailWidgets.DownloadedLabel.SetText(fmt.Sprintf("%d", tl.Selected.DownloadStatus.DonePieces))
-		tl.detailWidgets.ProgressBar.SetValue(percentage)
-	}
-}
+// TODO:
+// 1. pause button
+// 2. notification after download finished
+// 3. seeding
