@@ -1,6 +1,7 @@
 package torrent
 
 import (
+	"client/bitfield"
 	"client/connection"
 	"client/message"
 	"client/peer"
@@ -22,6 +23,7 @@ type Torrent struct {
 	Port           uint16
 	Path           string
 	Paused         bool
+	Bitfield       bitfield.Bitfield // Bitfield representing downloaded pieces
 	// Retrieved from TorrentFile:
 	// InfoHash       [20]byte
 	// PieceHashes    [][20]byte
@@ -64,6 +66,7 @@ func New(tf *torrentfile.TorrentFile, peerID *[20]byte, port uint16) (*Torrent, 
 		PeerID:         *peerID,
 		Port:           port,
 		Path:           "",
+		Bitfield:       nil,
 	}, nil
 }
 
@@ -204,6 +207,7 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 		}
 
 		c.SendHave(pw.index)
+		t.Bitfield.SetPiece(pw.index) // Update bitfield when piece is downloaded
 		resultsQueue <- &pieceResult{pw.index, buf}
 	}
 	t.DownloadStatus.DecrementPeersAmount()
@@ -271,12 +275,26 @@ func (t *Torrent) StartDownload(output *os.File) error {
 	// Initialize download status
 	t.DownloadStatus = &torrentstatus.TorrentStatus{DonePieces: 0, PeersAmount: 0}
 
+	// Initialize bitfield
+	t.Bitfield = make(bitfield.Bitfield, (len(t.PieceHashes)+7)/8)
+
 	// Check for existing pieces
 	existingPieces, err := t.scanExistingPieces(output)
 	if err != nil {
 		return fmt.Errorf("error scanning existing pieces: %v", err)
 	}
 	t.DownloadStatus.DonePieces = existingPieces
+
+	// Set bitfield for existing pieces
+	for i := range t.PieceHashes {
+		exists, err := t.checkExistingPiece(i, output)
+		if err != nil {
+			return err
+		}
+		if exists {
+			t.Bitfield.SetPiece(i)
+		}
+	}
 
 	// If all pieces are already downloaded, we're done
 	if existingPieces == len(t.PieceHashes) {

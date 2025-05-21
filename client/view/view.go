@@ -7,6 +7,7 @@ import (
 
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/widget"
 )
 
 func CreateMainWindow() {
@@ -15,23 +16,30 @@ func CreateMainWindow() {
 	viewutils.MainWindow = viewutils.MainApp.NewWindow("GoTorrent")
 
 	// Create torrent list
-	torrentList := torrentlist.New()
+	leecherList := torrentlist.New()
+	seedingList := torrentlist.New() // Create a second list for seeding torrents
 
 	// Create toolbar
-	toolbar := toolbar.New(torrentList)
+	toolbar := toolbar.New(leecherList)
 
-	// Create main content with list and grid
-	mainContent := container.NewHSplit(torrentList.Widgets, torrentList.Grid)
-	mainContent.SetOffset(0.3)
+	// Create vertical split for main list and seeding list
+	seedingLabel := widget.NewLabel("Seeding")
+	leechingLabel := widget.NewLabel("Leeching")
+
+	seedingSection := container.NewVBox(seedingLabel, seedingList.Widgets)
+	leechingSection := container.NewVBox(leechingLabel, leecherList.Widgets)
+
+	listsContainer := container.NewVSplit(leechingSection, seedingSection)
+	listsContainer.SetOffset(0.7) // Main list takes 70% of height
 
 	// Create vertical container for grid and progress bar
 	gridWithProgress := container.NewVBox(
-		torrentList.Grid,
-		torrentList.Progress,
+		leecherList.Grid,
+		leecherList.Progress,
 	)
 
-	// Update main content to use the new container
-	mainContent = container.NewHSplit(torrentList.Widgets, gridWithProgress)
+	// Create main content with lists and grid
+	mainContent := container.NewHSplit(listsContainer, gridWithProgress)
 	mainContent.SetOffset(0.3)
 
 	// Create main container with toolbar and content
