@@ -4,6 +4,7 @@ import (
 	"client/common"
 	"client/torrent"
 	"client/torrentfile"
+	"client/view/torrentcreate"
 	"client/view/torrentlist"
 	"client/view/viewutils"
 	"client/viewmodel"
@@ -30,6 +31,7 @@ func New(tl *torrentlist.TorrentList) *widget.Toolbar {
 		widget.NewToolbarAction(theme.DownloadIcon(), tb.handleStartTorrent),
 		widget.NewToolbarAction(theme.MediaPlayIcon(), tb.handleResumeTorrent),
 		widget.NewToolbarAction(theme.MediaPauseIcon(), tb.handleStopTorrent),
+		widget.NewToolbarAction(theme.DocumentSaveIcon(), torrentcreate.HandleCreateTorrent), // Add create torrent button
 	)
 
 	return tb.widget
