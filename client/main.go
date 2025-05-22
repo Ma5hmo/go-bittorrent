@@ -38,6 +38,6 @@ func writeToFile(filename string, data []byte) error {
 // }
 
 func main() {
-	common.Init()
+	common.InitAppState()
 	view.CreateMainWindow()
 }

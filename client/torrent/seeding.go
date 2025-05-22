@@ -4,7 +4,9 @@ import (
 	"client/connection"
 	"client/handshake"
 	"client/message"
+	"client/torrent/seedingstatus"
 	"crypto/sha1"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
@@ -13,10 +15,15 @@ import (
 )
 
 // StartSeeder listens for incoming connections and seeds the torrent file to peers.
-func (t *Torrent) StartSeeder() error {
+func (t *Torrent) StartSeeder() {
+	// Initialize seeding status if not already
+	if t.SeedingStatus == nil {
+		t.SeedingStatus = &seedingstatus.SeedingStatus{SeededBytes: 0, ActivePeers: 0}
+	}
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", t.Port))
 	if err != nil {
-		return fmt.Errorf("failed to listen on port %d: %w", t.Port, err)
+		log.Printf("failed to listen on port %d: %v", t.Port, err)
+		return
 	}
 	log.Printf("Seeder listening on port %d", t.Port)
 	for {
@@ -31,6 +38,8 @@ func (t *Torrent) StartSeeder() error {
 
 func (t *Torrent) handleSeederConn(conn net.Conn) {
 	defer conn.Close()
+	t.SeedingStatus.IncrementActivePeers()
+	defer t.SeedingStatus.DecrementActivePeers()
 
 	// --- Encryption handshake: receive key/iv ---
 	key := make([]byte, 32)
@@ -144,9 +153,9 @@ func (t *Torrent) handleRequest(msg *message.Message, rw io.ReadWriter, file *os
 		log.Printf("Received request with invalid payload length: %d", len(msg.Payload))
 		return
 	}
-	index := int(uint32(msg.Payload[0])<<24 | uint32(msg.Payload[1])<<16 | uint32(msg.Payload[2])<<8 | uint32(msg.Payload[3]))
-	begin := int(uint32(msg.Payload[4])<<24 | uint32(msg.Payload[5])<<16 | uint32(msg.Payload[6])<<8 | uint32(msg.Payload[7]))
-	length := int(uint32(msg.Payload[8])<<24 | uint32(msg.Payload[9])<<16 | uint32(msg.Payload[10])<<8 | uint32(msg.Payload[11]))
+	index := int(binary.BigEndian.Uint32(msg.Payload[0:4]))
+	begin := int(binary.BigEndian.Uint32(msg.Payload[4:8]))
+	length := int(binary.BigEndian.Uint32(msg.Payload[8:12]))
 	if index < 0 || index >= len(t.PieceHashes) {
 		log.Printf("Received request for invalid piece index: %d", index)
 		return
@@ -176,20 +185,16 @@ func (t *Torrent) handleRequest(msg *message.Message, rw io.ReadWriter, file *os
 	}
 	// Send piece
 	payload := make([]byte, 8+len(buf))
-	// index
-	payload[0] = byte(index >> 24)
-	payload[1] = byte(index >> 16)
-	payload[2] = byte(index >> 8)
-	payload[3] = byte(index)
-	// begin
-	payload[4] = byte(begin >> 24)
-	payload[5] = byte(begin >> 16)
-	payload[6] = byte(begin >> 8)
-	payload[7] = byte(begin)
+	binary.BigEndian.PutUint32(payload[0:4], uint32(index))
+	binary.BigEndian.PutUint32(payload[4:8], uint32(begin))
 	copy(payload[8:], buf)
 	pieceMsg := &message.Message{ID: message.MsgPiece, Payload: payload}
 	_, err = rw.Write(pieceMsg.Serialize())
 	if err != nil {
 		log.Printf("Failed to send piece: %v", err)
+	}
+	// Update seeding status
+	if t.SeedingStatus != nil {
+		t.SeedingStatus.IncrementSeededBytes(int64(len(buf)))
 	}
 }

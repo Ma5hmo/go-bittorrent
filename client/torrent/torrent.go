@@ -5,6 +5,7 @@ import (
 	"client/connection"
 	"client/message"
 	"client/peer"
+	"client/torrent/seedingstatus"
 	"client/torrent/torrentstatus"
 	"client/torrentfile"
 	"crypto/sha1"
@@ -18,6 +19,7 @@ import (
 type Torrent struct {
 	*torrentfile.TorrentFile
 	DownloadStatus *torrentstatus.TorrentStatus
+	SeedingStatus  *seedingstatus.SeedingStatus // <-- Add this pointer
 	Peers          []peer.Peer
 	PeerID         [20]byte
 	Port           uint16

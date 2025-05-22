@@ -10,6 +10,7 @@ var AppState struct {
 	Port   uint16
 }
 
-func Init() {
+func InitAppState() {
+	AppState.Port = 6881
 	copy(AppState.PeerID[:], []byte(fmt.Sprintf("-GT001-%012d", rand.Int63())))
 }
