@@ -14,7 +14,10 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 )
+
+const MAX_PORT = 6889
 
 // StartSeeder listens for incoming connections and seeds the torrent file to peers.
 func (t *Torrent) StartSeeder() {
@@ -23,7 +26,7 @@ func (t *Torrent) StartSeeder() {
 	log.Printf("[Seeder] StartSeeder called for torrent: %s", t.Name)
 	// If seeding is paused, do not start
 	if t.IsSeedingPaused {
-		log.Printf("[Seeder] Seeding is paused for torrent: %s", t.Name)
+		t.IsSeedingPaused = false // resume it
 		return
 	}
 	file, err := os.Open(t.Path)
@@ -44,9 +47,29 @@ func (t *Torrent) StartSeeder() {
 			t.Bitfield.SetPiece(i)
 		}
 	}
+
+	var ln net.Listener
+	for t.Port <= MAX_PORT {
+		ln, err = net.Listen("tcp", fmt.Sprintf(":%d", t.Port))
+		if err != nil {
+			log.Printf("[Seeder] failed to listen on port %d: %v", t.Port, err)
+			if t.Port >= MAX_PORT {
+				log.Printf("[Seeder] gave up on listening")
+				viewutils.ShowMessage("No ports are available for listening")
+				return
+			}
+			t.Port++
+		} else {
+			break
+		}
+	}
+
+	defer ln.Close()
+
 	err = t.SendSeedingAnnounce(t.AnnounceList[0], t.Port, &t.PeerID, uint64(t.Length), 0)
 	if err != nil {
 		log.Printf("[Seeder] error sending seeding announce - %v", err)
+		viewutils.ShowMessage("error sending seeding announce: " + err.Error())
 		return
 	}
 
@@ -54,11 +77,6 @@ func (t *Torrent) StartSeeder() {
 	if t.SeedingStatus == nil {
 		log.Printf("[Seeder] Initializing SeedingStatus for torrent: %s", t.Name)
 		t.SeedingStatus = &seedingstatus.SeedingStatus{SeededBytes: 0, ActivePeers: 0}
-	}
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", t.Port))
-	if err != nil {
-		log.Printf("[Seeder] failed to listen on port %d: %v", t.Port, err)
-		return
 	}
 	log.Printf("[Seeder] Seeder listening on port %d", t.Port)
 	for {
@@ -68,7 +86,7 @@ func (t *Torrent) StartSeeder() {
 			continue
 		}
 		log.Printf("[Seeder] Accepted connection from %v", conn.RemoteAddr())
-		go t.handleSeederConn(conn, false) // IS ENCRYPTED
+		go t.handleSeederConn(conn, true) // IS ENCRYPTED
 	}
 }
 
@@ -120,9 +138,9 @@ func (t *Torrent) handleSeederConn(conn net.Conn, encrypted bool) {
 	t.servePeer(encConn, file)
 }
 
-func (t *Torrent) performHandshake(rw io.ReadWriter) bool {
+func (t *Torrent) performHandshake(rw io.ReadWriter, keyIv *connection.AESKeyIv) bool {
 	log.Printf("[Seeder] Performing handshake")
-	hs, err := handshake.Read(rw)
+	hs, err := handshake.Read(rw, keyIv)
 	if err != nil {
 		log.Printf("[Seeder] Handshake failed: %v", err)
 		return false
@@ -132,7 +150,7 @@ func (t *Torrent) performHandshake(rw io.ReadWriter) bool {
 		return false
 	}
 	resp := handshake.New(&t.InfoHash, &t.PeerID)
-	_, err = rw.Write(resp.Serialize())
+	_, err = rw.Write(resp.Serialize(keyIv))
 	if err != nil {
 		log.Printf("[Seeder] Failed to send handshake: %v", err)
 		return false
@@ -158,7 +176,14 @@ func (t *Torrent) servePeer(rw io.ReadWriter, file *os.File) {
 	log.Printf("[Seeder] servePeer started")
 	interested := false
 	for {
+		for t.IsSeedingPaused {
+			time.Sleep(500 * time.Millisecond)
+		}
+
 		msg, err := message.Read(rw)
+		for t.IsSeedingPaused {
+			time.Sleep(500 * time.Millisecond)
+		}
 		if err != nil {
 			if err == io.EOF {
 				log.Printf("[Seeder] Peer closed connection (EOF)")

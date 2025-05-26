@@ -91,7 +91,7 @@ func (tb *Toolbar) handleResumeTorrent() {
 		viewutils.ShowMessage("No torrent is selected")
 		return
 	}
-	if tb.torrentList.Grid.Selected.Path != "" && !tb.torrentList.Grid.Selected.IsSeedingPaused {
+	if tb.torrentList.Grid.Selected.Path != "" && tb.torrentList.Grid.Selected.DownloadStatus != nil {
 		tb.torrentList.Grid.Selected.ResumeDownload()
 		tb.torrentList.ForceUpdateDetails()
 		go viewmodel.StartTorrent(tb.torrentList.Grid.Selected, nil)
@@ -150,10 +150,19 @@ func (tb *Toolbar) dialogFileOpenHandler(u fyne.URIReadCloser, err error) {
 }
 
 func (tb *Toolbar) handleStopTorrent() {
-	if tb.torrentList.Grid.Selected != nil {
+	if tb.torrentList.Grid.Selected == nil {
+		return
+	}
+	if tb.torrentList.Grid.Selected.DownloadStatus != nil {
 		tb.torrentList.Grid.Selected.PauseDownload()
 		tb.torrentList.ForceUpdateDetails()
+		return
 	}
+	if !tb.torrentList.Grid.Selected.IsSeedingPaused {
+		tb.torrentList.Grid.Selected.IsSeedingPaused = true
+		tb.torrentList.ForceUpdateDetails()
+	}
+
 }
 
 func (tb *Toolbar) handleSeedTorrent() {

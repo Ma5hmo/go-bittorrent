@@ -168,7 +168,7 @@ func checkIntegrity(pw *pieceWork, buf []byte) error {
 func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 	resultsQueue chan *pieceResult) {
 	log.Printf("[DownloadWorker] Starting download worker for peer: %s", peer.String())
-	c, err := connection.New(peer, &t.PeerID, &t.InfoHash, false) // IS ENCRYPTED
+	c, err := connection.New(peer, &t.PeerID, &t.InfoHash, true) // IS ENCRYPTED
 	if err != nil {
 		log.Printf("[DownloadWorker] Could not handshake with %s - %s", peer.IP, err)
 		t.DownloadStatus.DecrementPeersAmount()
@@ -179,14 +179,13 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 	log.Printf("[DownloadWorker] Sending UNCHOKE and INTERESTED to peer: %s", peer.String())
 	c.SendUnchoke()
 	c.SendInterested()
-	log.Printf("other bitfield - %v", t.Bitfield)
+	log.Printf("other bitfield - %v", c.Bitfield)
 	for pw := range workQueue {
 		// Check if download is paused
 		if t.Paused {
 			log.Printf("[DownloadWorker] Download paused, putting piece %d back on queue", pw.index)
-			workQueue <- pw                    // Put piece back on the queue
-			time.Sleep(100 * time.Millisecond) // Sleep briefly before checking again
-			continue
+			workQueue <- pw // Put piece back on the queue
+			return
 		}
 
 		if !c.Bitfield.HasPiece(pw.index) {
@@ -260,14 +259,15 @@ func (t *Torrent) scanExistingPieces(file *os.File) (int, error) {
 func (t *Torrent) StartDownload(output *os.File) error {
 	log.Printf("[Torrent] StartDownload called for %s", t.Name)
 	var err error
+
 	if t.DownloadStatus != nil {
 		if t.DownloadStatus.DonePieces == len(t.PieceHashes) {
 			log.Printf("[Torrent] file is already done")
-		} else {
-			log.Printf("[Torrent] resuming download")
-			t.ResumeDownload()
+			return nil
 		}
-		return nil
+		if t.Paused {
+			t.Paused = false
+		}
 	}
 
 	if output != nil {
@@ -284,11 +284,9 @@ func (t *Torrent) StartDownload(output *os.File) error {
 	}
 	defer output.Close()
 
-	// Initialize download status
 	log.Printf("[Torrent] Initializing download status")
 	t.DownloadStatus = &torrentstatus.TorrentStatus{DonePieces: 0, PeersAmount: 0}
 
-	// Initialize bitfield
 	log.Printf("[Torrent] Initializing bitfield")
 	t.Bitfield = make(bitfield.Bitfield, (len(t.PieceHashes)+7)/8)
 
@@ -355,9 +353,8 @@ func (t *Torrent) StartDownload(output *os.File) error {
 	// Collect results into a buffer until full
 	for t.DownloadStatus.DonePieces < len(t.PieceHashes) {
 		if t.Paused {
-			log.Printf("[Torrent] Download paused, waiting...")
-			time.Sleep(500 * time.Millisecond)
-			continue
+			log.Printf("[Torrent] Download paused, returning")
+			return nil
 		}
 
 		res := <-results
