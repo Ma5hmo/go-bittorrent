@@ -85,12 +85,12 @@ func sendConnectUDP(conn *net.UDPConn) (connectionID uint64, err error) {
 }
 
 func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash *[20]byte,
-	port uint16, peerID *[20]byte) (peers []peer.Peer, err error) {
+	port uint16, peerID *[20]byte, downloaded, uploaded uint64, event uint32) (peers []peer.Peer, err error) {
 	const BUFF_SIZE = 1024
 	const HEADER_LENGTH = 20
 	const PEERS_RETURNED = (BUFF_SIZE - HEADER_LENGTH) / 6
 
-	req := newAnnounceRequestUDP(connectionID, *infoHash, *peerID, 0, 1000, 0, 2,
+	req := newAnnounceRequestUDP(connectionID, *infoHash, *peerID, downloaded, 1000, uploaded, event,
 		[4]byte{0}, port, PEERS_RETURNED)
 
 	err = binary.Write(conn, binary.BigEndian, req)
@@ -134,8 +134,8 @@ func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash *[20]byte,
 	return
 }
 
-func (t *TorrentFile) requestPeersUDP(port uint16, peerID *[20]byte,
-	announce string) (peers []peer.Peer, err error) {
+func (t *TorrentFile) sendFullAnnounceUDP(port uint16, peerID *[20]byte,
+	announce string, downloaded, uploaded uint64, event uint32) (peers []peer.Peer, err error) {
 	raddr, err := net.ResolveUDPAddr("udp", announce)
 	if err != nil {
 		return
@@ -156,9 +156,18 @@ func (t *TorrentFile) requestPeersUDP(port uint16, peerID *[20]byte,
 	if err != nil {
 		return
 	}
-	peers, err = sendAnnounceUDP(conn, connectionID, &t.InfoHash, port, peerID)
+	peers, err = sendAnnounceUDP(conn, connectionID, &t.InfoHash, port, peerID, downloaded, uploaded, event)
 	if err != nil {
 		return
 	}
 	return
+}
+
+func (t *TorrentFile) requestPeersUDP(port uint16, peerID *[20]byte, announce string) ([]peer.Peer, error) {
+	return t.sendFullAnnounceUDP(port, peerID, announce, 0, 0, 2)
+}
+
+func (t *TorrentFile) sendSeedingAnnounceUDP(port uint16, peerID *[20]byte, announce string, downloaded, uploaded uint64) error {
+	_, err := t.sendFullAnnounceUDP(port, peerID, announce, downloaded, uploaded, 1)
+	return err
 }

@@ -18,6 +18,7 @@ type TorrentFile struct {
 	PieceLength  int
 	Length       int
 	Name         string
+	Path         string // Path to the actual file to seed (not bencoded)
 }
 
 type bencodeInfo struct {
@@ -143,6 +144,7 @@ func CreateFromFile(filePath, announce, torrentName, description string, pieceLe
 		PieceLength:  pieceLength,
 		Length:       length,
 		Name:         name,
+		Path:         filePath,
 	}
 	// Generate infohash
 	infoDict := map[string]interface{}{

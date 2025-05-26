@@ -31,13 +31,25 @@ func (t *TorrentFile) RequestPeers(peerID *[20]byte, port uint16) ([]peer.Peer, 
 	return peers, nil
 }
 
-func (t *TorrentFile) requestPeersFromAnnounce(announce string, port uint16, peerID *[20]byte) ([]peer.Peer, error) {
+func (t *TorrentFile) requestPeersFromAnnounce(announce string, port uint16,
+	peerID *[20]byte) ([]peer.Peer, error) {
 	announce, isUDP := strings.CutPrefix(announce, "udp://")
 	if isUDP {
 		announce, _ = strings.CutSuffix(announce, "/announce")
 		return t.requestPeersUDP(port, peerID, announce)
 	}
 	return t.requestPeersHTTP(port, peerID, announce)
+}
+
+func (t *TorrentFile) SendSeedingAnnounce(announce string, port uint16,
+	peerID *[20]byte, downloaded, uploaded uint64) error {
+	announce, isUDP := strings.CutPrefix(announce, "udp://")
+	if isUDP {
+		announce, _ = strings.CutSuffix(announce, "/announce")
+		return t.sendSeedingAnnounceUDP(port, peerID, announce, downloaded, uploaded)
+	}
+	return t.sendSeedingAnnounceHTTP(port, peerID, announce, downloaded, uploaded)
+
 }
 
 func removeDuplicates(sliceList []peer.Peer) []peer.Peer {

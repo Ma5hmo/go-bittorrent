@@ -17,26 +17,6 @@ func writeToFile(filename string, data []byte) error {
 	return err
 }
 
-// func main() {
-// 	tf, err := torrentfile.Open("../exampletorrents/debian.torrent")
-// 	if err != nil {
-// 		log.Fatalf("opening torrent - %v", err)
-// 	}
-// 	log.Printf("infohash - %x", tf.InfoHash)
-// 	peerId := createPeerId()
-// 	port := uint16(6881)
-// 	t, err := torrent.New(&tf, peerId, port)
-// 	if err != nil {
-// 		log.Fatalf("create torrent - %v", err)
-// 	}
-// 	buf := t.Download()
-// 	err = writeToFile("../downloaded.bin", buf)
-// 	if err != nil {
-// 		log.Fatalf("writing to file - %v", err)
-// 	}
-// 	log.Printf("END")
-// }
-
 func main() {
 	common.InitAppState()
 	view.CreateMainWindow()

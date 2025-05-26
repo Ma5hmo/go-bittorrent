@@ -18,14 +18,14 @@ import (
 
 type Torrent struct {
 	*torrentfile.TorrentFile
-	DownloadStatus *torrentstatus.TorrentStatus
-	SeedingStatus  *seedingstatus.SeedingStatus // <-- Add this pointer
-	Peers          []peer.Peer
-	PeerID         [20]byte
-	Port           uint16
-	Path           string
-	Paused         bool
-	Bitfield       bitfield.Bitfield // Bitfield representing downloaded pieces
+	DownloadStatus  *torrentstatus.TorrentStatus
+	SeedingStatus   *seedingstatus.SeedingStatus // <-- Add this pointer
+	Peers           []peer.Peer
+	PeerID          [20]byte
+	Port            uint16
+	Paused          bool
+	IsSeedingPaused bool              // true if seeding is paused, false if active
+	Bitfield        bitfield.Bitfield // Bitfield representing downloaded pieces
 	// Retrieved from TorrentFile:
 	// InfoHash       [20]byte
 	// PieceHashes    [][20]byte
@@ -67,7 +67,6 @@ func New(tf *torrentfile.TorrentFile, peerID *[20]byte, port uint16) (*Torrent, 
 		Peers:          nil,
 		PeerID:         *peerID,
 		Port:           port,
-		Path:           "",
 		Bitfield:       nil,
 	}, nil
 }
@@ -168,34 +167,39 @@ func checkIntegrity(pw *pieceWork, buf []byte) error {
 
 func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 	resultsQueue chan *pieceResult) {
-	c, err := connection.New(peer, &t.PeerID, &t.InfoHash)
+	log.Printf("[DownloadWorker] Starting download worker for peer: %s", peer.String())
+	c, err := connection.New(peer, &t.PeerID, &t.InfoHash, false) // IS ENCRYPTED
 	if err != nil {
-		log.Printf("Could not handshake with %s - %s\n", peer.IP, err)
+		log.Printf("[DownloadWorker] Could not handshake with %s - %s", peer.IP, err)
 		t.DownloadStatus.DecrementPeersAmount()
 		return
 	}
 	defer c.Conn.Close()
 
+	log.Printf("[DownloadWorker] Sending UNCHOKE and INTERESTED to peer: %s", peer.String())
 	c.SendUnchoke()
 	c.SendInterested()
-
+	log.Printf("other bitfield - %v", t.Bitfield)
 	for pw := range workQueue {
 		// Check if download is paused
 		if t.Paused {
+			log.Printf("[DownloadWorker] Download paused, putting piece %d back on queue", pw.index)
 			workQueue <- pw                    // Put piece back on the queue
 			time.Sleep(100 * time.Millisecond) // Sleep briefly before checking again
 			continue
 		}
 
 		if !c.Bitfield.HasPiece(pw.index) {
+			// log.Printf("[DownloadWorker] Peer %s does not have piece %d, putting back on queue", peer.String(), pw.index)
 			workQueue <- pw // Put piece back on the queue
 			continue
 		}
 
+		log.Printf("[DownloadWorker] Attempting to download piece %d from peer %s", pw.index, peer.String())
 		// Download the piece
 		buf, err := attemptDownloadPiece(c, pw)
 		if err != nil {
-			log.Println("Exiting", err)
+			log.Printf("[DownloadWorker] Exiting worker for peer %s: %v", peer.String(), err)
 			workQueue <- pw // Put piece back on the queue
 			t.DownloadStatus.DecrementPeersAmount()
 			return
@@ -203,15 +207,17 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 
 		err = checkIntegrity(pw, buf)
 		if err != nil {
-			log.Printf("Piece #%d failed integrity check\n", pw.index)
+			log.Printf("[DownloadWorker] Piece #%d failed integrity check", pw.index)
 			workQueue <- pw // Put piece back on the queue
 			continue
 		}
 
+		log.Printf("[DownloadWorker] Downloaded and verified piece %d from peer %s", pw.index, peer.String())
 		c.SendHave(pw.index)
 		t.Bitfield.SetPiece(pw.index) // Update bitfield when piece is downloaded
 		resultsQueue <- &pieceResult{pw.index, buf}
 	}
+	log.Printf("[DownloadWorker] Worker for peer %s finished", peer.String())
 	t.DownloadStatus.DecrementPeersAmount()
 }
 
@@ -232,6 +238,7 @@ func (t *Torrent) checkExistingPiece(index int, file *os.File) (bool, error) {
 
 	// Verify the piece hash
 	h := sha1.Sum(buf)
+	log.Printf("read BUF at index %d, %v", index, h == t.PieceHashes[index])
 	return h == t.PieceHashes[index], nil
 }
 
@@ -251,12 +258,13 @@ func (t *Torrent) scanExistingPieces(file *os.File) (int, error) {
 }
 
 func (t *Torrent) StartDownload(output *os.File) error {
+	log.Printf("[Torrent] StartDownload called for %s", t.Name)
 	var err error
 	if t.DownloadStatus != nil {
 		if t.DownloadStatus.DonePieces == len(t.PieceHashes) {
-			log.Printf("file is already done")
+			log.Printf("[Torrent] file is already done")
 		} else {
-			log.Printf("resuming download")
+			log.Printf("[Torrent] resuming download")
 			t.ResumeDownload()
 		}
 		return nil
@@ -267,22 +275,28 @@ func (t *Torrent) StartDownload(output *os.File) error {
 	} else if t.Path != "" {
 		output, err = os.OpenFile(t.Path, os.O_RDWR|os.O_CREATE, 0666)
 		if err != nil {
+			log.Printf("[Torrent] Error opening file for download: %v", err)
 			return err
 		}
 	} else {
+		log.Printf("[Torrent] No file is presented to StartDownload")
 		return fmt.Errorf("no file is presented to StartDownload")
 	}
 	defer output.Close()
 
 	// Initialize download status
+	log.Printf("[Torrent] Initializing download status")
 	t.DownloadStatus = &torrentstatus.TorrentStatus{DonePieces: 0, PeersAmount: 0}
 
 	// Initialize bitfield
+	log.Printf("[Torrent] Initializing bitfield")
 	t.Bitfield = make(bitfield.Bitfield, (len(t.PieceHashes)+7)/8)
 
 	// Check for existing pieces
+	log.Printf("[Torrent] Scanning for existing pieces in file")
 	existingPieces, err := t.scanExistingPieces(output)
 	if err != nil {
+		log.Printf("[Torrent] error scanning existing pieces: %v", err)
 		return fmt.Errorf("error scanning existing pieces: %v", err)
 	}
 	t.DownloadStatus.DonePieces = existingPieces
@@ -291,6 +305,7 @@ func (t *Torrent) StartDownload(output *os.File) error {
 	for i := range t.PieceHashes {
 		exists, err := t.checkExistingPiece(i, output)
 		if err != nil {
+			log.Printf("[Torrent] Error checking existing piece %d: %v", i, err)
 			return err
 		}
 		if exists {
@@ -300,13 +315,15 @@ func (t *Torrent) StartDownload(output *os.File) error {
 
 	// If all pieces are already downloaded, we're done
 	if existingPieces == len(t.PieceHashes) {
-		log.Println("All pieces already downloaded!")
+		log.Println("[Torrent] All pieces already downloaded!")
 		return nil
 	}
 
 	// Get peers
+	log.Printf("[Torrent] Requesting peers for download")
 	t.Peers, err = t.RequestPeers(&t.PeerID, t.Port)
 	if err != nil {
+		log.Printf("[Torrent] Error requesting peers: %v", err)
 		return err
 	}
 	t.DownloadStatus.PeersAmount = len(t.Peers)
@@ -320,6 +337,7 @@ func (t *Torrent) StartDownload(output *os.File) error {
 	for index, hash := range t.PieceHashes {
 		exists, err := t.checkExistingPiece(index, output)
 		if err != nil {
+			log.Printf("[Torrent] Error checking existing piece %d: %v", index, err)
 			return err
 		}
 		if !exists {
@@ -328,6 +346,7 @@ func (t *Torrent) StartDownload(output *os.File) error {
 		}
 	}
 
+	log.Printf("[Torrent] Starting download workers for %d peers", len(t.Peers))
 	// Start workers
 	for _, peer := range t.Peers {
 		go t.startDownloadWorker(peer, workQueue, results)
@@ -336,6 +355,7 @@ func (t *Torrent) StartDownload(output *os.File) error {
 	// Collect results into a buffer until full
 	for t.DownloadStatus.DonePieces < len(t.PieceHashes) {
 		if t.Paused {
+			log.Printf("[Torrent] Download paused, waiting...")
 			time.Sleep(500 * time.Millisecond)
 			continue
 		}
@@ -346,12 +366,14 @@ func (t *Torrent) StartDownload(output *os.File) error {
 		t.DownloadStatus.IncrementDonePieces()
 		percent := t.CalculateDownloadPercentage()
 
-		log.Printf("(%0.2f%%) Downloaded piece #%d from %d peers\n", percent, res.index, t.DownloadStatus.GetPeersAmount())
+		log.Printf("[Torrent] (%0.2f%%) Downloaded piece #%d from %d peers", percent, res.index, t.DownloadStatus.GetPeersAmount())
 		if _, err := output.WriteAt(res.buf[:end-begin], int64(begin)); err != nil {
+			log.Printf("[Torrent] Error writing piece %d to file: %v", res.index, err)
 			return err
 		}
 	}
 	close(workQueue)
+	log.Printf("[Torrent] Download complete for %s", t.Name)
 	return nil
 }
 
@@ -361,6 +383,12 @@ func (t *Torrent) PauseDownload() error {
 }
 
 func (t *Torrent) ResumeDownload() error {
+	var err error
+	t.Peers, err = t.RequestPeers(&t.PeerID, t.Port)
+	if err != nil {
+		log.Printf("[Torrent] Error requesting peers: %v", err)
+		return err
+	}
 	t.Paused = false
 	return nil
 }

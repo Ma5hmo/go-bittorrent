@@ -175,18 +175,31 @@ func (g *Grid) updateLabels() {
 
 	// Seeding or Downloading status
 	if g.Selected.SeedingStatus != nil {
-		// Seeding mode
-		g.labels.Status.SetText("🌱 SEEDING")
-		g.labels.Status.Importance = widget.HighImportance
-		peers := g.Selected.SeedingStatus.GetActivePeers()
-		seeded := g.Selected.SeedingStatus.GetSeededBytes()
-		g.labels.Peers.SetText(fmt.Sprintf("%d", peers))
-		g.labels.Downloaded.SetText(fmt.Sprintf("%d bytes", seeded))
-		g.labels.DownloadedHeader.SetText("Seeded")
-		g.Progress.SetValue(1) // Seeding is always 100%
-		g.Progress.Hide()
+		if g.Selected.IsSeedingPaused {
+			g.labels.Status.SetText("⏸️ SEEDING PAUSED")
+			g.labels.Status.Importance = widget.HighImportance
+			g.labels.Peers.SetText("0")
+			g.labels.Downloaded.SetText("0 bytes")
+			g.labels.DownloadedHeader.SetText("Seeded")
+			g.Progress.SetValue(0)
+			g.Progress.Hide()
+		} else {
+			// Seeding mode
+			g.labels.Status.SetText("🌱 SEEDING")
+			g.labels.Status.Importance = widget.HighImportance
+			peers := g.Selected.SeedingStatus.GetActivePeers()
+			seeded := g.Selected.SeedingStatus.GetSeededBytes()
+			g.labels.Peers.SetText(fmt.Sprintf("%d", peers))
+			g.labels.Downloaded.SetText(fmt.Sprintf("%d bytes", seeded))
+			g.labels.DownloadedHeader.SetText("Seeded")
+			g.Progress.SetValue(1) // Seeding is always 100%
+			g.Progress.Hide()
+		}
 	} else if g.Selected.DownloadStatus != nil {
-		if g.Selected.Paused {
+		if g.Selected.CalculateDownloadPercentage() == 100.0 {
+			g.labels.Status.SetText("✅ FINISHED")
+			g.labels.Status.Importance = widget.MediumImportance
+		} else if g.Selected.Paused {
 			// Paused
 			g.labels.Status.SetText("⏸️ PAUSED")
 			g.labels.Status.Importance = widget.HighImportance

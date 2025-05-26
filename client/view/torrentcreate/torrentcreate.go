@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 )
@@ -101,13 +100,10 @@ func HandleCreateTorrent() {
 		dlg.Show()
 	}
 
-	w := fyne.CurrentApp().NewWindow("Create Torrent")
-	w.SetContent(container.NewVBox(
-		widget.NewLabel("Create a new Torrent File"),
-		form,
-	))
-	w.Resize(fyne.NewSize(400, 350))
-	w.Show()
+	form.Resize(fyne.NewSize(800, 430))
+	dlg := dialog.NewCustom("Create a new Torrent file", "Close", form, viewutils.MainWindow)
+	dlg.Resize(fyne.NewSize(1000, 430))
+	dlg.Show()
 }
 
 // createAndSaveTorrent creates and saves a .torrent file with metadata and custom piece length using TorrentFile struct

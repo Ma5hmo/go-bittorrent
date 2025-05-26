@@ -2,7 +2,9 @@ package torrentfile
 
 import (
 	"client/peer"
+	"context"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -17,7 +19,7 @@ type bencodeTrackerResp struct {
 	Peers    string `bencode:"peers"`
 }
 
-func (t *TorrentFile) buildTrackerURL(peerID *[20]byte, port uint16, announce string) (string, error) {
+func (t *TorrentFile) buildTrackerURL(peerID *[20]byte, port uint16, announce, uploaded, downloaded, event string) (string, error) {
 	base, err := url.Parse(announce)
 	if err != nil {
 		return "", err
@@ -26,8 +28,9 @@ func (t *TorrentFile) buildTrackerURL(peerID *[20]byte, port uint16, announce st
 		"info_hash":  []string{string(t.InfoHash[:])},
 		"peer_id":    []string{string((*peerID)[:])},
 		"port":       []string{strconv.Itoa(int(port))},
-		"uploaded":   []string{"0"},
-		"downloaded": []string{"0"},
+		"uploaded":   []string{uploaded},
+		"downloaded": []string{downloaded},
+		"event":      []string{event},
 		"compact":    []string{"1"},
 		"left":       []string{strconv.Itoa(t.Length)},
 	}
@@ -35,14 +38,23 @@ func (t *TorrentFile) buildTrackerURL(peerID *[20]byte, port uint16, announce st
 	return base.String(), nil
 }
 
-func (t *TorrentFile) requestPeersHTTP(port uint16, peerID *[20]byte, announce string) ([]peer.Peer, error) {
+func (t *TorrentFile) sendAnnounceHTTP(port uint16, peerID *[20]byte, announce, uploaded, downloaded, event string) ([]peer.Peer, error) {
 	// Build the tracker URL
-	url, err := t.buildTrackerURL(peerID, port, announce)
+	url, err := t.buildTrackerURL(peerID, port, announce, uploaded, downloaded, event)
 	if err != nil {
 		return nil, err
 	}
 	log.Printf("Url - %s", url)
+
+	var zeroDialer net.Dialer
 	c := &http.Client{Timeout: 15 * time.Second}
+	// force ipv4
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		return zeroDialer.DialContext(ctx, "tcp4", addr)
+	}
+	c.Transport = transport
+
 	resp, err := c.Get(url)
 	if err != nil {
 		return nil, err
@@ -71,4 +83,15 @@ func (t *TorrentFile) requestPeersHTTP(port uint16, peerID *[20]byte, announce s
 	}
 
 	return peer.UnmarshalDict(dictPeers)
+}
+
+func (t *TorrentFile) requestPeersHTTP(port uint16, peerID *[20]byte,
+	announce string) ([]peer.Peer, error) {
+	return t.sendAnnounceHTTP(port, peerID, announce, "0", "0", "started")
+}
+
+func (t *TorrentFile) sendSeedingAnnounceHTTP(port uint16, peerID *[20]byte, announce string,
+	uploaded, downloaded uint64) error {
+	_, err := t.sendAnnounceHTTP(port, peerID, announce, string(uploaded), string(downloaded), "")
+	return err
 }

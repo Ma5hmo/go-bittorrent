@@ -14,6 +14,5 @@ func StartTorrent(t *torrent.Torrent, fileOutput *os.File) {
 	if err != nil {
 		log.Printf("error starting download - %s", err.Error())
 	}
-
-	// update it to being done or smth
+	// Will automatically be updated to done
 }

@@ -42,32 +42,33 @@ func New(tl *torrentlist.TorrentList, seedingList *torrentlist.TorrentList) *wid
 }
 
 func (tb *Toolbar) handleOpenTorrent() {
-	// dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
-	// if err != nil {
-	//  viewutils.ShowMessage("Error opening file:\n" + err.Error())
-	//  return
-	// }
-	// if reader == nil {
-	//  viewutils.ShowMessage("No file selected")
-	//  return
-	// }
-	// defer reader.Close()
-	// // use reader.URI().Path() to open a torrentfile
-	// )}
-	tf, err := torrentfile.Open("../exampletorrents/debian.torrent")
-	if err != nil {
-		viewutils.ShowMessage("Error parsing torrent:\n" + err.Error())
-		return
-	}
-	go func() {
-		t, err := torrent.New(&tf, &common.AppState.PeerID, common.AppState.Port)
+	dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
 		if err != nil {
-			viewutils.ShowMessage("Failed to create torrent:\n" + err.Error())
+			viewutils.ShowMessage("Error opening file:\n" + err.Error())
 			return
 		}
+		if reader == nil {
+			viewutils.ShowMessage("No file selected")
+			return
+		}
+		path := reader.URI().Path()
+		reader.Close()
+		tf, err := torrentfile.Open(path) //"../exampletorrents/debian.torrent")
+		// use reader.URI().Path() to open a torrentfile
+		if err != nil {
+			viewutils.ShowMessage("Error parsing torrent:\n" + err.Error())
+			return
+		}
+		go func() {
+			t, err := torrent.New(&tf, &common.AppState.PeerID, common.AppState.Port)
+			if err != nil {
+				viewutils.ShowMessage("Failed to create torrent:\n" + err.Error())
+				return
+			}
 
-		tb.torrentList.AddTorrent(t)
-	}()
+			tb.torrentList.AddTorrent(t)
+		}()
+	}, viewutils.MainWindow).Show()
 }
 
 func (tb *Toolbar) handleStartTorrent() {
@@ -90,10 +91,17 @@ func (tb *Toolbar) handleResumeTorrent() {
 		viewutils.ShowMessage("No torrent is selected")
 		return
 	}
-	if tb.torrentList.Grid.Selected.Path != "" {
+	if tb.torrentList.Grid.Selected.Path != "" && !tb.torrentList.Grid.Selected.IsSeedingPaused {
 		tb.torrentList.Grid.Selected.ResumeDownload()
 		tb.torrentList.ForceUpdateDetails()
 		go viewmodel.StartTorrent(tb.torrentList.Grid.Selected, nil)
+		return
+	}
+	// If this is a seeding torrent and is paused, start seeding
+	if tb.torrentList.Grid.Selected.IsSeedingPaused {
+		tb.torrentList.Grid.Selected.IsSeedingPaused = false
+		go tb.torrentList.Grid.Selected.StartSeeder()
+		tb.torrentList.ForceUpdateDetails()
 		return
 	}
 	dlg := dialog.NewFileOpen(tb.dialogFileOpenHandler, viewutils.MainWindow)
@@ -149,34 +157,62 @@ func (tb *Toolbar) handleStopTorrent() {
 }
 
 func (tb *Toolbar) handleSeedTorrent() {
-	dlg := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
-		if err != nil {
-			viewutils.ShowMessage("Error selecting file to seed: " + err.Error())
-			return
-		}
-		if reader == nil {
-			return
-		}
-		filePath := reader.URI().Path()
-		reader.Close()
+	// Buttons to open file dialogs
+	torrentBtn := widget.NewButton("Choose .torrent", nil)
+	torrentBtn.OnTapped = func() {
+		dlg := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+			if err != nil || reader == nil {
+				return
+			}
+			torrentBtn.SetText(reader.URI().Path())
+			reader.Close()
+		}, viewutils.MainWindow)
+		dlg.SetFilter(storage.NewExtensionFileFilter([]string{".torrent"}))
+		dlg.Show()
+	}
+	fileBtn := widget.NewButton("Choose File", nil)
+	fileBtn.OnTapped = func() {
+		dlg := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+			if err != nil || reader == nil {
+				return
+			}
+			fileBtn.SetText(reader.URI().Path())
+			reader.Close()
+		}, viewutils.MainWindow)
+		dlg.Show()
+	}
 
-		// Open the torrent file and create a Torrent struct
-		tf, err := torrentfile.Open(filePath)
-		if err != nil {
-			viewutils.ShowMessage("Error parsing torrent: " + err.Error())
-			return
-		}
-		t, err := torrent.New(&tf, &common.AppState.PeerID, common.AppState.Port) // Use default PeerID/Port for seeding
-		if err != nil {
-			viewutils.ShowMessage("Failed to create torrent: " + err.Error())
-			return
-		}
-
-		tb.seedingList.AddTorrent(t)
-
-		// Start seeding in background
-		go t.StartSeeder()
-	}, viewutils.MainWindow)
+	form := &widget.Form{
+		Items: []*widget.FormItem{
+			{Text: "Torrent file", Widget: torrentBtn},
+			{Text: "File to seed", Widget: fileBtn},
+		},
+		OnSubmit: func() {
+			torrentPath := torrentBtn.Text
+			filePath := fileBtn.Text
+			if torrentPath == "Choose .torrent" || filePath == "Choose File" {
+				viewutils.ShowMessage("Please select both a .torrent file and a file to seed.")
+				return
+			}
+			tf, err := torrentfile.Open(torrentPath)
+			if err != nil {
+				viewutils.ShowMessage("Error parsing torrent: " + err.Error())
+				return
+			}
+			t, err := torrent.New(&tf, &common.AppState.PeerID, common.AppState.Port)
+			t.Path = filePath // Save the actual file path
+			if err != nil {
+				viewutils.ShowMessage("Failed to create torrent: " + err.Error())
+				return
+			}
+			t.IsSeedingPaused = true // Mark as paused for seeding
+			tb.seedingList.AddTorrent(t)
+			// Do NOT start seeding here; wait for resume
+			viewutils.ShowMessage("Torrent added to seeding list. Press Resume to start seeding.")
+		},
+	}
+	form.Resize(fyne.NewSize(800, 430))
+	dlg := dialog.NewCustom("Seed Torrent", "Close", form, viewutils.MainWindow)
+	dlg.Resize(fyne.NewSize(1000, 430))
 	dlg.Show()
-	dlg.SetFilter(storage.NewExtensionFileFilter([]string{".torrent"}))
 }
