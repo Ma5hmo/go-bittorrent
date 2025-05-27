@@ -42,7 +42,7 @@ func New(tl *torrentlist.TorrentList, seedingList *torrentlist.TorrentList) *wid
 }
 
 func (tb *Toolbar) handleOpenTorrent() {
-	dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+	dlg := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
 		if err != nil {
 			viewutils.ShowMessage("Error opening file:\n" + err.Error())
 			return
@@ -68,7 +68,9 @@ func (tb *Toolbar) handleOpenTorrent() {
 
 			tb.torrentList.AddTorrent(t)
 		}()
-	}, viewutils.MainWindow).Show()
+	}, viewutils.MainWindow)
+	dlg.SetFilter(storage.NewExtensionFileFilter([]string{".torrent"}))
+	dlg.Show()
 }
 
 func (tb *Toolbar) handleStartTorrent() {

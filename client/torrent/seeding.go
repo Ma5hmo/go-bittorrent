@@ -86,7 +86,7 @@ func (t *Torrent) StartSeeder() {
 			continue
 		}
 		log.Printf("[Seeder] Accepted connection from %v", conn.RemoteAddr())
-		go t.handleSeederConn(conn, true) // IS ENCRYPTED
+		go t.handleSeederConn(conn, false) // IS ENCRYPTED
 	}
 }
 
@@ -138,9 +138,9 @@ func (t *Torrent) handleSeederConn(conn net.Conn, encrypted bool) {
 	t.servePeer(encConn, file)
 }
 
-func (t *Torrent) performHandshake(rw io.ReadWriter, keyIv *connection.AESKeyIv) bool {
+func (t *Torrent) performHandshake(rw io.ReadWriter) bool {
 	log.Printf("[Seeder] Performing handshake")
-	hs, err := handshake.Read(rw, keyIv)
+	hs, err := handshake.Read(rw)
 	if err != nil {
 		log.Printf("[Seeder] Handshake failed: %v", err)
 		return false
@@ -150,7 +150,7 @@ func (t *Torrent) performHandshake(rw io.ReadWriter, keyIv *connection.AESKeyIv)
 		return false
 	}
 	resp := handshake.New(&t.InfoHash, &t.PeerID)
-	_, err = rw.Write(resp.Serialize(keyIv))
+	_, err = rw.Write(resp.Serialize())
 	if err != nil {
 		log.Printf("[Seeder] Failed to send handshake: %v", err)
 		return false

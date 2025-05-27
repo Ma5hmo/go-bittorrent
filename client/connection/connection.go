@@ -125,7 +125,7 @@ func New(peer peer.Peer, peerID *[20]byte, infoHash *[20]byte, encrypted bool) (
 }
 
 func (c *Connection) Read() (*message.Message, error) {
-	log.Printf("[Connection] Reading message from peer: %s", c.peer.String())
+	// log.Printf("[Connection] Reading message from peer: %s", c.peer.String())
 	return message.Read(c.EncConn)
 }
 

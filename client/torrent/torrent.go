@@ -168,7 +168,7 @@ func checkIntegrity(pw *pieceWork, buf []byte) error {
 func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 	resultsQueue chan *pieceResult) {
 	log.Printf("[DownloadWorker] Starting download worker for peer: %s", peer.String())
-	c, err := connection.New(peer, &t.PeerID, &t.InfoHash, true) // IS ENCRYPTED
+	c, err := connection.New(peer, &t.PeerID, &t.InfoHash, false) // IS ENCRYPTED
 	if err != nil {
 		log.Printf("[DownloadWorker] Could not handshake with %s - %s", peer.IP, err)
 		t.DownloadStatus.DecrementPeersAmount()
@@ -237,7 +237,6 @@ func (t *Torrent) checkExistingPiece(index int, file *os.File) (bool, error) {
 
 	// Verify the piece hash
 	h := sha1.Sum(buf)
-	log.Printf("read BUF at index %d, %v", index, h == t.PieceHashes[index])
 	return h == t.PieceHashes[index], nil
 }
 
