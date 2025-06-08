@@ -27,8 +27,8 @@ server.on('listening', function () {
   console.log(`UDP tracker: udp://${udpHost}:${udpPort}`)
 })
 
-const port = {http: 6969, udp: 6969}
-const hostname = {http: "192.168.16.75", udp: "localhost"}
+const port = {http: 8080, udp: 8080}
+const hostname = {http: "127.0.0.1", udp: "localhost"}
 server.listen(port, hostname, () => {
   console.log(`Tracker server listening on http://${hostname.http}:${port.http}`)
 })
