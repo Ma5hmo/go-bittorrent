@@ -3,7 +3,6 @@ package torrentfile
 import (
 	"client/peer"
 	"context"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -44,7 +43,7 @@ func (t *TorrentFile) sendAnnounceHTTP(port uint16, peerID *[20]byte, announce, 
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Url - %s", url)
+	// log.Printf("Url - %s", url)
 
 	var zeroDialer net.Dialer
 	c := &http.Client{Timeout: 15 * time.Second}
@@ -71,14 +70,14 @@ func (t *TorrentFile) sendAnnounceHTTP(port uint16, peerID *[20]byte, announce, 
 		return peers, nil
 	}
 
-	log.Printf("Couldnt decode as binary, resolving to dict")
+	// log.Printf("Couldnt decode as binary, resolving to dict")
 
 	// Fallback: try to decode as dictionary model
 	var dictPeers []map[string]interface{}
 	err = bencode.NewDecoder(strings.NewReader(trackerResp.Peers)).Decode(&dictPeers)
-	log.Printf("dictpeers - %v", dictPeers)
+	// log.Printf("dictpeers - %v", dictPeers)
 	if err != nil {
-		log.Printf("Couldnt decode as dict - %v, DATA=%s", err, trackerResp.Peers)
+		// log.Printf("Couldnt decode as dict - %v, DATA=%s", err, trackerResp.Peers)
 		return nil, err
 	}
 
@@ -92,6 +91,6 @@ func (t *TorrentFile) requestPeersHTTP(port uint16, peerID *[20]byte,
 
 func (t *TorrentFile) sendSeedingAnnounceHTTP(port uint16, peerID *[20]byte, announce string,
 	uploaded, downloaded uint64) error {
-	_, err := t.sendAnnounceHTTP(port, peerID, announce, string(uploaded), string(downloaded), "")
+	_, err := t.sendAnnounceHTTP(port, peerID, announce, strconv.FormatUint(uploaded, 10), strconv.FormatUint(downloaded, 10), "")
 	return err
 }

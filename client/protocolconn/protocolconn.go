@@ -10,47 +10,56 @@ import (
 )
 
 type ProtocolConn struct {
-	EncryptedReader io.Reader
-	EncryptedWriter io.Writer
-	RawReadWriter   io.ReadWriter
+	EncryptedReader io.Reader // decrypting reader
+	EncryptedWriter io.Writer // encrypting writer
+	RawReadWriter   io.ReadWriteCloser
 }
 
-func New(conn net.Conn, key []byte, iv []byte) (*ProtocolConn, error) {
-	block, err := aes.NewCipher(key)
+func New(conn net.Conn, encKey, decKey, encIV, decIV []byte) (*ProtocolConn, error) {
+	// Outgoing (encrypt)
+	encBlock, err := aes.NewCipher(encKey)
 	if err != nil {
 		return nil, err
 	}
-	stream := cipher.NewCTR(block, iv)
+	encStream := cipher.NewCTR(encBlock, encIV)
+
+	// Incoming (decrypt)
+	decBlock, err := aes.NewCipher(decKey)
+	if err != nil {
+		return nil, err
+	}
+	decStream := cipher.NewCTR(decBlock, decIV)
 
 	return &ProtocolConn{
-		EncryptedReader: cipher.StreamReader{S: stream, R: conn},
-		EncryptedWriter: cipher.StreamWriter{S: stream, W: conn},
+		EncryptedReader: &cipher.StreamReader{S: decStream, R: conn},
+		EncryptedWriter: &cipher.StreamWriter{S: encStream, W: conn},
 		RawReadWriter:   conn,
 	}, nil
 }
 
-func (ec *ProtocolConn) Read(b []byte) (n int, err error) {
-	var lengthBytes [4]byte
-	_, err = ec.RawReadWriter.Read(lengthBytes[:])
-	if err != nil {
+func (pc *ProtocolConn) Read(p []byte) (int, error) {
+	var n uint32
+	if err := binary.Read(pc.RawReadWriter, binary.BigEndian, &n); err != nil {
 		return 0, err
 	}
-	length := int(binary.BigEndian.Uint32(lengthBytes[:]))
-	if length > len(b) {
+	if int(n) > len(p) {
 		return 0, io.ErrShortBuffer
 	}
-	return ec.EncryptedReader.Read(b[:length])
-}
-
-func (ec *ProtocolConn) Write(b []byte) (int, error) {
-	var lengthBytes [4]byte
-	binary.BigEndian.PutUint32(lengthBytes[:], uint32(len(b)))
-	_, err := ec.RawReadWriter.Write(b[0:4])
-	if err != nil {
+	if _, err := io.ReadFull(pc.EncryptedReader, p[:n]); err != nil {
 		return 0, err
 	}
-	n, err := ec.EncryptedWriter.Write(b[4:])
-	return n + 4, err // +4 for the length prefix
+	return int(n), nil
+}
+
+func (pc *ProtocolConn) Write(p []byte) (int, error) {
+	if err := binary.Write(pc.RawReadWriter, binary.BigEndian, uint32(len(p))-4); err != nil {
+		return 0, err
+	}
+	written, err := pc.EncryptedWriter.Write(p[4:])
+	if err != nil {
+		return written, err
+	}
+	return 4 + written, nil
 }
 
 func GenerateRandomKeyIV() (key, iv []byte, err error) {

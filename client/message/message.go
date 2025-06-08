@@ -65,6 +65,7 @@ func Read(r *protocolconn.ProtocolConn) (*Message, error) {
 		ID:      messageID(messageBuf[0]),
 		Payload: messageBuf[1:],
 	}
+	// log.Printf("[Message] Read message ID: %d, length: %d, payload: %v\n", m.ID, length, m.Payload)
 
 	return &m, nil
 }

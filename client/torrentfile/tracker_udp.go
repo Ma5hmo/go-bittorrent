@@ -104,7 +104,7 @@ func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash *[20]byte,
 	if err != nil || bytesRead == HEADER_LENGTH {
 		return
 	}
-	// log.Printf("Recieved announce response: %v", resBytes.Bytes()[:bytesRead])
+	// // log.Printf("Recieved announce response: %v", resBytes.Bytes()[:bytesRead])
 	if bytesRead < HEADER_LENGTH {
 		err = fmt.Errorf("unexpected response length of announce response - %v < %v", bytesRead, HEADER_LENGTH)
 		return
@@ -129,7 +129,7 @@ func sendAnnounceUDP(conn *net.UDPConn, connectionID uint64, infoHash *[20]byte,
 		peers[i].IP = net.IPv4(currData[0], currData[1], currData[2], currData[3])
 		peers[i].Port = binary.BigEndian.Uint16(currData[4:6])
 	}
-	log.Printf("recieved peers: %v", peers)
+	// log.Printf("recieved peers: %v", peers)
 
 	return
 }
@@ -145,7 +145,7 @@ func (t *TorrentFile) sendFullAnnounceUDP(port uint16, peerID *[20]byte,
 	if err != nil {
 		return
 	}
-	log.Printf("Dialed to %v", raddr)
+	// log.Printf("Dialed to %v", raddr)
 	defer conn.Close()
 
 	err = conn.SetDeadline(time.Now().Add(5 * time.Second))

@@ -177,10 +177,8 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 	}
 	defer c.Conn.Close()
 
-	log.Printf("[DownloadWorker] Sending UNCHOKE and INTERESTED to peer: %s", peer.String())
 	c.SendUnchoke()
 	c.SendInterested()
-	log.Printf("other bitfield - %v", c.Bitfield)
 	for pw := range workQueue {
 		// Check if download is paused
 		if t.Paused {
@@ -190,12 +188,12 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 		}
 
 		if !c.Bitfield.HasPiece(pw.index) {
-			// log.Printf("[DownloadWorker] Peer %s does not have piece %d, putting back on queue", peer.String(), pw.index)
+			// // log.Printf("[DownloadWorker] Peer %s does not have piece %d, putting back on queue", peer.String(), pw.index)
 			workQueue <- pw // Put piece back on the queue
 			continue
 		}
 
-		log.Printf("[DownloadWorker] Attempting to download piece %d from peer %s", pw.index, peer.String())
+		// log.Printf("[DownloadWorker] Attempting to download piece %d from peer %s", pw.index, peer.String())
 		// Download the piece
 		buf, err := attemptDownloadPiece(c, pw)
 		if err != nil {
@@ -207,12 +205,12 @@ func (t *Torrent) startDownloadWorker(peer peer.Peer, workQueue chan *pieceWork,
 
 		err = checkIntegrity(pw, buf)
 		if err != nil {
-			log.Printf("[DownloadWorker] Piece #%d failed integrity check", pw.index)
+			// log.Printf("[DownloadWorker] Piece #%d failed integrity check", pw.index)
 			workQueue <- pw // Put piece back on the queue
 			continue
 		}
 
-		log.Printf("[DownloadWorker] Downloaded and verified piece %d from peer %s", pw.index, peer.String())
+		// log.Printf("[DownloadWorker] Downloaded and verified piece %d from peer %s", pw.index, peer.String())
 		c.SendHave(pw.index)
 		t.Bitfield.SetPiece(pw.index) // Update bitfield when piece is downloaded
 		resultsQueue <- &pieceResult{pw.index, buf}
@@ -361,9 +359,9 @@ func (t *Torrent) StartDownload(output *os.File) error {
 		begin, end := t.calculateBoundsForPiece(res.index)
 
 		t.DownloadStatus.IncrementDonePieces()
-		percent := t.CalculateDownloadPercentage()
+		// percent := t.CalculateDownloadPercentage()
 
-		log.Printf("[Torrent] (%0.2f%%) Downloaded piece #%d from %d peers", percent, res.index, t.DownloadStatus.GetPeersAmount())
+		// log.Printf("[Torrent] (%0.2f%%) Downloaded piece #%d from %d peers", percent, res.index, t.DownloadStatus.GetPeersAmount())
 		if _, err := output.WriteAt(res.buf[:end-begin], int64(begin)); err != nil {
 			log.Printf("[Torrent] Error writing piece %d to file: %v", res.index, err)
 			return err
