@@ -1,6 +1,7 @@
 package message
 
 import (
+	"client/protocolconn"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -41,9 +42,9 @@ func FormatHave(index int) *Message {
 }
 
 // Read parses a message from a stream. Returns `nil` on keep-alive message
-func Read(r io.Reader) (*Message, error) {
+func Read(r *protocolconn.ProtocolConn) (*Message, error) {
 	lengthBuf := make([]byte, 4)
-	_, err := io.ReadFull(r, lengthBuf)
+	_, err := io.ReadFull(r.RawReadWriter, lengthBuf)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +56,7 @@ func Read(r io.Reader) (*Message, error) {
 	}
 
 	messageBuf := make([]byte, length)
-	_, err = io.ReadFull(r, messageBuf)
+	_, err = io.ReadFull(r.EncryptedReader, messageBuf)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package handshake
 
 import (
+	"client/protocolconn"
 	"fmt"
 	"io"
 )
@@ -34,9 +35,9 @@ func (h *Handshake) Serialize() []byte {
 	return buf
 }
 
-func Read(r io.Reader) (*Handshake, error) {
+func Read(r *protocolconn.ProtocolConn) (*Handshake, error) {
 	lengthBuf := make([]byte, 1)
-	_, err := io.ReadFull(r, lengthBuf)
+	_, err := io.ReadFull(r.RawReadWriter, lengthBuf)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +49,7 @@ func Read(r io.Reader) (*Handshake, error) {
 	}
 
 	handshakeBuf := make([]byte, 48+pstrlen)
-	_, err = io.ReadFull(r, handshakeBuf)
+	_, err = io.ReadFull(r.EncryptedReader, handshakeBuf)
 	if err != nil {
 		return nil, err
 	}

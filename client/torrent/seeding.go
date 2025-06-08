@@ -2,9 +2,10 @@ package torrent
 
 import (
 	"client/bitfield"
-	"client/connection"
+	"client/common"
 	"client/handshake"
 	"client/message"
+	"client/protocolconn"
 	"client/torrent/seedingstatus"
 	"client/view/viewutils"
 	"crypto/sha1"
@@ -86,7 +87,7 @@ func (t *Torrent) StartSeeder() {
 			continue
 		}
 		log.Printf("[Seeder] Accepted connection from %v", conn.RemoteAddr())
-		go t.handleSeederConn(conn, false) // IS ENCRYPTED
+		go t.handleSeederConn(conn, common.AppState.IsTrafficAESEncrypted)
 	}
 }
 
@@ -95,7 +96,11 @@ func (t *Torrent) handleSeederConn(conn net.Conn, encrypted bool) {
 	t.SeedingStatus.IncrementActivePeers()
 	defer t.SeedingStatus.DecrementActivePeers()
 	log.Printf("[Seeder] Connected to peer: %v", conn.RemoteAddr())
-	var encConn io.ReadWriter = conn
+	var encConn *protocolconn.ProtocolConn = &protocolconn.ProtocolConn{
+		EncryptedReader: conn,
+		EncryptedWriter: conn,
+		RawReadWriter:   conn,
+	}
 	var err error
 	if encrypted {
 		log.Printf("[Seeder] Starting encrypted handshake with peer: %v", conn.RemoteAddr())
@@ -110,7 +115,7 @@ func (t *Torrent) handleSeederConn(conn net.Conn, encrypted bool) {
 			log.Printf("[Seeder] Failed to read iv: %v", err)
 			return
 		}
-		encConn, err = connection.WrapConnWithAES(conn, key, iv)
+		encConn, err = protocolconn.New(conn, key, iv)
 		if err != nil {
 			log.Printf("[Seeder] Failed to wrap conn with AES: %v", err)
 			return
@@ -138,7 +143,7 @@ func (t *Torrent) handleSeederConn(conn net.Conn, encrypted bool) {
 	t.servePeer(encConn, file)
 }
 
-func (t *Torrent) performHandshake(rw io.ReadWriter) bool {
+func (t *Torrent) performHandshake(rw *protocolconn.ProtocolConn) bool {
 	log.Printf("[Seeder] Performing handshake")
 	hs, err := handshake.Read(rw)
 	if err != nil {
@@ -172,7 +177,7 @@ func (t *Torrent) sendBitfield(rw io.ReadWriter) bool {
 	return true
 }
 
-func (t *Torrent) servePeer(rw io.ReadWriter, file *os.File) {
+func (t *Torrent) servePeer(rw *protocolconn.ProtocolConn, file *os.File) {
 	log.Printf("[Seeder] servePeer started")
 	interested := false
 	for {

@@ -6,8 +6,8 @@ import (
 	"client/handshake"
 	"client/message"
 	"client/peer"
+	"client/protocolconn"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"time"
@@ -15,8 +15,8 @@ import (
 
 // Connection represents a client connection.
 type Connection struct {
-	Conn     net.Conn      // Underlying TCP connection
-	EncConn  io.ReadWriter // Encrypted connection for protocol communication
+	Conn     net.Conn                   // Underlying TCP connection
+	EncConn  *protocolconn.ProtocolConn // Encrypted connection for protocol communication
 	Choked   bool
 	Bitfield bitfield.Bitfield
 	peer     peer.Peer
@@ -24,7 +24,7 @@ type Connection struct {
 	peerID   *[20]byte
 }
 
-func completeHandshake(rw io.ReadWriter, infohash, peerID *[20]byte) (*handshake.Handshake, error) {
+func completeHandshake(rw *protocolconn.ProtocolConn, infohash, peerID *[20]byte) (*handshake.Handshake, error) {
 	// Use ReadWriter for handshake
 	req := handshake.New(infohash, peerID)
 	log.Printf("created handshake - %v", req)
@@ -46,7 +46,7 @@ func completeHandshake(rw io.ReadWriter, infohash, peerID *[20]byte) (*handshake
 	return resp, nil
 }
 
-func recvBitfield(rw io.ReadWriter) (bitfield.Bitfield, error) {
+func recvBitfield(rw *protocolconn.ProtocolConn) (bitfield.Bitfield, error) {
 	msg, err := message.Read(rw)
 	if err != nil {
 		return nil, err
@@ -69,11 +69,15 @@ func New(peer peer.Peer, peerID *[20]byte, infoHash *[20]byte, encrypted bool) (
 		log.Printf("[Connection] Failed to connect to peer: %s, error: %v", peer.String(), err)
 		return nil, err
 	}
-	var encConn io.ReadWriter = conn
+	var encConn *protocolconn.ProtocolConn = &protocolconn.ProtocolConn{
+		EncryptedReader: conn,
+		EncryptedWriter: conn,
+		RawReadWriter:   conn,
+	}
 	if encrypted {
 		log.Printf("[Connection] Starting encryption handshake with peer: %s", peer.String())
 		// --- Encryption handshake: send key/iv ---
-		key, iv, err := GenerateRandomKeyIV()
+		key, iv, err := protocolconn.GenerateRandomKeyIV()
 		if err != nil {
 			log.Printf("[Connection] Failed to generate key/iv: %v", err)
 			conn.Close()
@@ -89,7 +93,7 @@ func New(peer peer.Peer, peerID *[20]byte, infoHash *[20]byte, encrypted bool) (
 			conn.Close()
 			return nil, err
 		}
-		encConn, err = WrapConnWithAES(conn, key, iv)
+		encConn, err = protocolconn.New(conn, key, iv)
 		if err != nil {
 			log.Printf("[Connection] Failed to wrap conn with AES: %v", err)
 			conn.Close()
