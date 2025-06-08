@@ -26,7 +26,6 @@ go.work.sum
 
 # Bittorrent test files
 exampletorrents/
-bittorrent-tracker/
 *.torrent
 
 # Visual Studio Code
