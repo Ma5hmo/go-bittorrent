@@ -7,10 +7,10 @@ import series from 'run-series'
 import string2compact from 'string2compact'
 import { hex2bin } from 'uint8-util'
 
-import common from './lib/common.js'
-import Swarm from './lib/swarm.js'
-import parseHttpRequest from './lib/parse-http.js'
-import parseUdpRequest from './lib/parse-udp.js'
+import common from './common.js'
+import Swarm from './swarm.js'
+import parseHttpRequest from './parse-http.js'
+import parseUdpRequest from './parse-udp.js'
 
 const debug = Debug('bittorrent-tracker:server')
 

@@ -1,26 +1,9 @@
 {
   "name": "bittorrent-tracker",
-  "description": "Simple, robust, BitTorrent tracker (client & server) implementation",
-  "version": "11.2.1",
-  "author": {
-    "name": "WebTorrent LLC",
-    "email": "feross@webtorrent.io",
-    "url": "https://webtorrent.io"
-  },
-  "bin": {
-    "bittorrent-tracker": "./bin/cmd.js"
-  },
-  "browser": {
-    "./lib/common-node.js": false,
-    "./lib/client/http-tracker.js": false,
-    "./lib/client/udp-tracker.js": false,
-    "./server.js": false,
-    "socks": false
-  },
-  "bugs": {
-    "url": "https://github.com/webtorrent/bittorrent-tracker/issues"
-  },
+  "description": "Bittorrent tracker implementation",
+  "version": "1.0.0",
   "type": "module",
+  "main": "index.js",
   "dependencies": {
     "bencode": "^4.0.0",
     "debug": "^4.3.4",
@@ -40,17 +23,6 @@
   "engines": {
     "node": ">=16.0.0"
   },
-  "exports": {
-    ".": {
-      "import": "./index.js"
-    },
-    "./client": {
-      "import": "./client.js"
-    },
-    "./server": {
-      "import": "./server.js"
-    }
-  },
   "keywords": [
     "bittorrent",
     "p2p",
@@ -61,41 +33,7 @@
     "tracker",
     "wire"
   ],
-  "license": "MIT",
-  "main": "index.js",
-  "optionalDependencies": {
-    "bufferutil": "^4.0.8",
-    "utf-8-validate": "^6.0.4"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/webtorrent/bittorrent-tracker.git"
-  },
   "scripts": {
-    "preversion": "npm run update-authors",
-    "test": "standard && tape test/*.js",
-    "update-authors": "./tools/update-authors.sh"
-  },
-  "funding": [
-    {
-      "type": "github",
-      "url": "https://github.com/sponsors/feross"
-    },
-    {
-      "type": "patreon",
-      "url": "https://www.patreon.com/feross"
-    },
-    {
-      "type": "consulting",
-      "url": "https://feross.org/support"
-    }
-  ],
-  "renovate": {
-    "extends": [
-      "github>webtorrent/renovate-config"
-    ]
-  },
-  "release": {
-    "extends": "@webtorrent/semantic-release-config"
+    "start": "node index.js"
   }
 }

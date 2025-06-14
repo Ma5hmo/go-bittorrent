@@ -1,4 +1,4 @@
-import Server from './server.js'
+import Server from './src/server.js'
 
 const server = new Server({
   udp: true,
