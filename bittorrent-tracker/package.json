@@ -1,0 +1,39 @@
+{
+  "name": "bittorrent-tracker",
+  "description": "Bittorrent tracker implementation",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "dependencies": {
+    "bencode": "^4.0.0",
+    "debug": "^4.3.4",
+    "ip": "^2.0.1",
+    "lru": "^3.1.0",
+    "random-iterate": "^1.0.1",
+    "run-series": "^1.1.9",
+    "sqlite3": "^5.1.7",
+    "string2compact": "^2.0.1",
+    "uint8-util": "^2.2.5",
+    "unordered-array-remove": "^1.0.2"
+  },
+  "devDependencies": {
+    "standard": "*",
+    "tape": "5.9.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "bittorrent",
+    "p2p",
+    "peer",
+    "peer-to-peer",
+    "stream",
+    "torrent",
+    "tracker",
+    "wire"
+  ],
+  "scripts": {
+    "start": "node index.js"
+  }
+}
